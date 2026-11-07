@@ -327,7 +327,8 @@ static partial class Game
                 contact.Projectile.ReactionRandomSource, player);
             ChargesOnHit(Conn, target, critical, shot.Spell, shot.Effect, shot.Level, shot.Quality, melee: false);
             InflictMonsterBlind(Conn, contact.Target.Id, target, at, shot.Blind, contact.Projectile.ReactionRandomSource);
-            CommitProjectileHit(this, contact, target, hit.Value, damage, shot, critical);
+            CommitProjectileHit(this, contact, target, hit.Value, damage, shot, critical,
+                OwnerStun(Conn, target, damage, mitigated, melee: false, shot.Spell, critical, player, shot.SkillStats));
             if (critical) Enqueue(() => MaybeCreateProfaneGround(remote, stream, ciphers, Conn, target.Walk.Position(at)));
             return ProjectileHitResult.Hit;
         }
@@ -365,7 +366,8 @@ static partial class Game
             // areas and continuation children, which do get objects).
             if (value.Kind == ProjectileEventKind.Spawn && p.Profile.HideVisual) return;
             if (value.Kind == ProjectileEventKind.Spawn && p.ParentId == 0
-                && p.Use.Payload is ProjectileOffense { ClientPredicted: true }) return;
+                && p.Use.Payload is ProjectileOffense primary
+                && ClientDrawsPrimaryProjectile(primary.ClientPredicted, SkillsFor(Conn).EffectId(primary.Effect))) return;
             if (value.Kind == ProjectileEventKind.Spawn)
             {
                 string? flightVisual = (p.Use.Payload as ProjectileOffense)?.FlightVisual ?? presentation.FlightVisual;

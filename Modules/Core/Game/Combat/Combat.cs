@@ -328,6 +328,7 @@ static partial class Game
             string? resistance;
             List<byte[]>? ignited = null, bled = null;
             string igniteLog = "", bleedLog = "";
+            StunHit stun;
             using (ProjectileMutation(conn))
             {
                 if (m.Life == 0) return true;
@@ -376,6 +377,7 @@ static partial class Game
                     ImpaleStats.From(player, Stats, attack: true, ownPenetration, weapon.LocalSources, critical));
                 impaleStacks = m.Impale.Stacks;
                 impaleStored = m.Impale.Bonus;
+                stun = OwnerStun(conn, m, damage, mitigated, WeaponProfileFor(conn, activeSet: true).Melee, spell: false, critical, player, ownPenetration);
                 if (!fortified) fortified = FortificationOnHitLocked(conn, m, RawFortificationDamage(ownRolled, critical, criticalMultiplier),
                     WeaponProfileFor(conn, activeSet: true).Melee, player, ownPenetration);
                 var rampageSource = RampageOnMeleeHitLocked(conn, m, WeaponProfileFor(conn, activeSet: true).Melee, player);
@@ -414,7 +416,7 @@ static partial class Game
                 await Send(remote, stream, ciphers, InstanceEntities.StatsUpdate(targetId, [(StatKeys.HideMiniLifeBar, 1)]),
                     $"0x01b3 monster 0x{targetId:x} hide_mini_life_bar = 1");
             // The hit reaction: one of the rig's TakeHit clips and its SoundEvent (0x1b2).
-            await SendFlinch(remote, stream, ciphers, conn, targetId, m, damage, log: true);
+            await SendFlinch(remote, stream, ciphers, conn, targetId, m, stun, log: true);
             // The hit result for the client's damage/effect pipeline (0x1af): the client applies the hit locally (the target's
             // blood, the weapon impact sound "bonk") and 0x1b1 stays authoritative on life. flags 0x4201 is the real server's
             // player-melee hit (bit 0 hit, 0x200 damage, 0x4000 attack), kind 0x03 = action hit with hit data, the angle drives
@@ -738,6 +740,8 @@ static partial class Game
                     () => !conn.Closed && PlayerActionCurrent(conn, action) && Current()) is { } accepted) return accepted;
         if (gem.Name is not null && GameEvents.RunSkillCast(conn, SkillsFor(conn).EffectId(gem.Effect), skillId, from,
                 () => !conn.Closed && PlayerActionCurrent(conn, action) && Current()) is { } taken) return taken;
+        if (gem.Name is not null && GolemData.Find(SkillsFor(conn).EffectId(gem.Effect)) is { } golem)
+            return await CastGolem(remote, stream, ciphers, conn, skillId, golem, to, recoveryGeneration, Current);
         if (gem.Name is not null && TotemVariety(conn, gem.Effect) is { } totem)
         {
             _ = PlaceTotem(remote, stream, ciphers, conn, skillId, gem.Effect, gem.Level, totem, to, Current);
@@ -1271,6 +1275,7 @@ static partial class Game
             string? resistance;
             List<byte[]>? ignited = null, bled = null;
             string igniteLog = "", bleedLog = "";
+            StunHit stun;
             using (ProjectileMutation(conn))
             {
                 // Catch up earlier projectile contacts before reading Rage or any other live offensive input. Stopping
@@ -1349,6 +1354,7 @@ static partial class Game
                 LeechOnHitLocked(conn, m, taken, damage, leech!);
                 damage = WithImpaleHitLocked(conn, m, damage, rolled, critical, sweepMultiplier,
                     critical ? criticalImpale : impale, more).Damage;
+                stun = OwnerStun(conn, m, damage, mitigated, !spell && SkillsFor(conn).IsMelee(gem.Effect), spell, critical, player, skillStats);
                 // Only the first victim has a freshly built player snapshot. After notification awaits, resolve the
                 // current raw source so a refund between victims cannot keep granting from the sweep's old snapshot.
                 var rampagePlayer = freshPlayer ? player : null;
@@ -1402,7 +1408,7 @@ static partial class Game
             if (critical) await MaybeCreateProfaneGround(remote, stream, ciphers, conn, m.Walk.Position(ProjectileWorldTime(conn)));
             await NotifyMonsterHit(remote, stream, ciphers, conn, id, m, hit, damage,
                 $"{gem.Name}{(critical ? " (critical)" : "")}{(resistance is null ? "" : $", {resistance}")}",
-                melee: melee ?? !spell, sequence: sequence, deaths: deaths);
+                melee: melee ?? !spell, sequence: sequence, deaths: deaths, stun: stun);
             await SendDotBuff(remote, stream, ciphers, ignited, igniteLog);
             await SendDotBuff(remote, stream, ciphers, bled, bleedLog);
             ChargesOnHit(conn, m, critical, spell, gem.Effect, gem.Level, gem.Quality, primary: id == targets[0].Id);
@@ -1528,7 +1534,7 @@ static partial class Game
 
     internal static async Task NotifyMonsterHit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id, SpawnedMonster m,
         MonsterHit hit, int damage, string by, bool log = true, bool melee = false, ushort sequence = 0,
-        List<(uint Id, SpawnedMonster M)>? deaths = null, byte hitCode = 0)
+        List<(uint Id, SpawnedMonster M)>? deaths = null, byte hitCode = 0, StunHit? stun = null)
     {
         var (life, stageStarts) = hit;
         if (life == 0)
@@ -1553,7 +1559,7 @@ static partial class Game
                 !log ? null : $"0x01af player hit on monster 0x{id:x} (skill, sequence 0x{sequence:x4})");
         }
         // The hit reaction: one of the rig's TakeHit clips and its SoundEvent (0x1b2), as in Attack.
-        await SendFlinch(remote, stream, ciphers, conn, id, m, damage, log);
+        await SendFlinch(remote, stream, ciphers, conn, id, m, stun ?? new(damage), log);
         await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(id, life),
             !log && life > 0 ? null : $"0x01b1 monster 0x{id:x} hit by {by} for {damage}, life {life}/{m.MaxLife}{(life == 0 ? " (dies)" : "")}");
         // One sweep's deaths (loot, experience, quests) wait until every monster of the sweep has its hit (AreaSkillHit).
@@ -1568,7 +1574,7 @@ static partial class Game
     // inside the send gate: a hit that kills it meanwhile marks it Dead before it sends its own 0x1b1, so the flinch either
     // goes out before the death or not at all.
     internal static Task SendFlinch(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
-        SpawnedMonster m, int damage, bool log) => SendMonsterFlinch(remote, stream, ciphers, conn, id, m, damage, log);
+        SpawnedMonster m, StunHit stun, bool log) => SendMonsterFlinch(remote, stream, ciphers, conn, id, m, stun, log);
 
     internal sealed record PlayerRecoveryIntent(int Epoch, int Action, double Until, float Seconds);
 
@@ -1667,18 +1673,29 @@ static partial class Game
     internal static async Task RunBossStage(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id, SpawnedMonster m)
     {
         var stage = m.Stage!;
-        (int X, int Y) at;
-        lock (conn.Monsters)
+        while (!m.StageActionStarted)
         {
-            double now = conn.Clock.Elapsed.TotalSeconds;
-            at = m.Walk.Position(now);
-            m.Walk.Order(at.X, at.Y, now);
-            m.LastTarget = null;
-            m.BusyUntil = now + stage.CastSeconds;
+            lock (conn.Monsters) if (!MonsterPresent(conn, id, m) || !m.StageRunning) return;
+            await Send(remote, stream, ciphers, [], null, atGate: () =>
+            {
+                lock (conn.Monsters)
+                {
+                    if (!MonsterPresent(conn, id, m) || !m.StageRunning || m.StageActionStarted || conn.Paused) return null;
+                    double now = AreaTime(conn);
+                    var at = m.Walk.Position(now);
+                    m.Walk.Order(at.X, at.Y, now);
+                    m.LastTarget = null;
+                    m.BusyUntil = now + stage.CastSeconds;
+                    m.StageEffectAt = now + stage.EffectSeconds(m.Variety is { } variety
+                        ? SkillsFor(conn).MonsterContact(variety.Id, "Throw", 0xffff) : null);
+                    m.StageActionStarted = true;
+                    Console.WriteLine($"[gateway] {remote} => monster 0x{id:x} ({m.Label}) starts its stage at " +
+                        $"{m.Life}/{m.MaxLife} life, game time {now:0.000}; effect at {m.StageEffectAt:0.000}, recovery at {m.BusyUntil:0.000}");
+                    return InstanceProtocol.ActionStarted(id, at.X, at.Y, at.X, at.Y, StageSkillId, 0xffff, 0x0408);
+                }
+            });
+            if (!m.StageActionStarted) await AreaWait(PlayerUpdateRole.MonsterAction, 16);
         }
-        await Send(remote, stream, ciphers, InstanceProtocol.ActionStarted(id, at.X, at.Y, at.X, at.Y, StageSkillId, 0xffff, 0x0408),
-            $"0x01ab monster 0x{id:x} ({m.Label}) starts its stage at {m.Life}/{m.MaxLife} life: skill 0x{StageSkillId:x4} (GrantedEffects {stage.SkillEffect}), {stage.CastSeconds:0.#} s");
-        await Task.Delay(TimeSpan.FromSeconds(stage.CastSeconds));
         await CompleteMonsterStage(remote, stream, ciphers, conn, id, m);
     }
 
