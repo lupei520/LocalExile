@@ -73,7 +73,9 @@ public static class InstanceProtocol
     /// <summary>Encrypted C→S messages whose length is known (live captures 2026-10-16): 0x1b tick, 0x7d area generated,
     /// 0x25 use skill at location (16), 0x015a and 0x01ef (id only). 0x0099 is 4 bytes (class 0x1435c0258, write
     /// 0x141f95200: two u8, meaning unknown), sent after entering an area together with the chat channel joins
-    /// (<see cref="InstanceChat.JoinChannelId"/>) and 0x0129 (id only); the 20 bytes once taken for 0x0099 were all four.</summary>
+    /// (<see cref="InstanceChat.JoinChannelId"/>) and 0x0129 (id only); the 20 bytes once taken for 0x0099 were all four.
+    /// The arms here are the ones read by hand from a writer or a live capture and take precedence over
+    /// <see cref="ClientMessageLengths"/>, which holds the rest of the extracted fixed-size writers.</summary>
     public static int? KnownClientLength(ushort id) => id switch
     {
         InstanceDelve.UpgradesRequestId => 2, InstanceDelve.UpgradeId => 4, InstanceDelve.PurchaseId => 4,
@@ -103,7 +105,10 @@ public static class InstanceProtocol
         InstanceMicrotransactions.RequestId => InstanceMicrotransactions.RequestLength,
         InstanceHideouts.SelectId => InstanceHideouts.SelectLength,
         InstanceHideoutEditing.MoveId => InstanceHideoutEditing.MoveLength,
-        InstanceBench.CraftId => InstanceBench.CraftLength, InstanceBench.MoveId => InstanceBench.MoveLength, InstanceHarvest.CraftId => InstanceHarvest.CraftLength, _ => null,
+        InstanceBench.CraftId => InstanceBench.CraftLength, InstanceBench.MoveId => InstanceBench.MoveLength, InstanceHarvest.CraftId => InstanceHarvest.CraftLength,
+        // Every other message the client sends with a writer that writes a fixed number of bytes, from the extracted
+        // send sites (Agents/docs/protocol/c2s.md; scripts/re/c2s_lengths.py writes the table).
+        _ => ClientMessageLengths.Known(id),
     };
 
     /// <summary>
