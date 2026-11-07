@@ -17,6 +17,7 @@ Part of [Status](../Status.md); what to build next in this area is in
 - Monster packs in areas: on entry the area fills with its MonsterPacks at the area level (The Coast: crab and Drowned
   packs, some magic, at least 2 with a rare; cannibal packs at the bonfires) and the unique boss at the camp's
   `mapboss` point with its boss pack (Fire Fury beside the campfire, verified live 2026-10-18);
+  Seeded pack plans repeat across server restarts.
   room points are found by fitting rooms to the doodads `-Walkmaps` captures.
   The Tidal Island's boat rooms are too sparse to fit and use their captured placement: Hailrake stands on the wreck.
   Rooms with a boss point take their actual placement (captured or generated); an unplaced sibling room adds none.
@@ -44,17 +45,17 @@ Part of [Status](../Status.md); what to build next in this area is in
   lurking Tide Striders on Tidal Island).
   Code: `MonsterEmerge.cs`, `Program.Emerge.cs`, Gateway.
   Docs: [10](../docs/protocol/10-chat-and-commands.md) §5.
-- Monster hit reaction: a positive hit that leaves a monster alive and takes at least a tenth of its maximum life
+- Monster hit reaction: a hit that leaves a monster alive and passes the wiki's stun roll
   requests native Actor TakeHit recovery (S→C 0x1d1, animation type 5).
-  Stun immunity, an absent TakeHit profile or an existing recovery prevents it; a killing blow gets no flinch.
-  A randomly chosen extracted clip length supplies the duration profile, with a 0.4 s minimum.
+  Stun immunity, a boss's 4 s immunity, an absent TakeHit profile or an existing recovery prevents it.
+  A killing blow gets no flinch.
+  [Chance and duration](../docs/game/juggernaut.md#stun) follow the wiki and `Character.ot`, not a clip's length.
   The actor's native ACT selects and fits the presented clip; the server does not force a rig index.
   Recovery stops server and client movement, holds AI and invalidates old ordinary swing echoes and contacts.
   Historical LocalExile moving-Drowned samples held one cell through recovery, then resumed a fresh AI walk.
   This standalone port has fresh automated coverage; native integration remains pending in the
   [port record](../docs/dev/ranged-monster-actions-port.md).
   Rig-only 0x1b2 did not stop locomotion; it is no longer used as the enemy's recovery packet.
-  Thresholds and duration profiles remain a bounded local policy rather than a complete official stun formula.
   The weapon impact sound and the target's blood come from S→C 0x1af "action hit", sent on melee and attack-gem hits
   and on monster hits on the player (2026-10-25; not yet checked live after the timing cap).
   GGG's server sends it too, but with the monster action's own sequence and skill index 2, where we send 0xffff and 0
@@ -197,7 +198,7 @@ Part of [Status](../Status.md); what to build next in this area is in
 - Monster walk speed on the server includes the client's per-monster speed roll: Actor setup draws a uniform percent
   in the MonsterVarieties row's range (the Goatmen ±5 %, the 7.60–8.40 band measured live for a base of 8; most rows
   none) from a TinyMT32 state keyed by the object id and its type, and the walk estimate, swing range and contact
-  checks use that speed.
+  checks use that speed; equal bounds retain their fixed percent rather than defaulting to zero.
   The range, the generator and the key order come from the decompile and pass the tests; whether the key's type word
   is the 0x2b9 type hash, and so whether the exact value matches the client's, is not checked live yet
   (`scripts/re/frida/trace-movement.js` prints each monster's seed words, range and multiplier).
@@ -226,6 +227,8 @@ Part of [Status](../Status.md); what to build next in this area is in
 ## Not working yet
 
 - Area monsters: pack counts, magic/rare chances and rare mod counts are our own numbers;
+  Act 1 Twilight Strand caps new populations at a provisional 45 including Hillock and the tutorial zombie.
+  The reference capture misses its opening, so this is calibration rather than a verified official total;
   74 monster mods need systems the server lacks (auras on allies, monster skills, ailments on the player …) and do
   not roll;
   Drowned ignore their ground types; how near the player must come before an emerge monster rises is our choice;
