@@ -102,7 +102,7 @@ static class GroundSlamWave
     /// <summary>The wave's half angle in degrees before <c>ground_slam_angle_+%</c>: half of the cone
     /// <c>ground_slam_cone_angle_override</c> names (60 degrees across, not on each side), which no player stat set
     /// carries, so it is a constant here.</summary>
-    public const double HalfAngleDegrees = 30;
+    public const double HalfAngleDegrees = 60;
 
     /// <summary>How fast the wave's front travels, in cells a second (10 cells = 1 m). ESTIMATE: no table carries a
     /// speed. The live client plays the whole slam in one 0.633 s clip, so the front has to cross the wave's reach
