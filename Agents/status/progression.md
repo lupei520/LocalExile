@@ -318,10 +318,17 @@ Part of [Status](../Status.md); what to build next in this area is in
   Native passive alternatives and the compounding level formula have automated coverage.
   See [league modes](../docs/game/league-modes.md).
 
+- Quest progress survives a relog: the character save keeps the quest flags (`QuestFlags.dat` Ids), the
+  activated waypoints and the areas entered, so the quest log, the world panel's pins and the waypoint list
+  all come back (the client derives the quest log from the flags itself); session flags
+  (`SessionQuestFlags.dat`, e.g. a1q6-FairgravesAggro) are deliberately not saved.
+  Live 2026-11-07: a1q1's kill and reward flags, three waypoints and six visited areas survived a client restart.
+  Code: `CharacterSaves.ChangeQuestFlags`, `Quests.cs`.
+  Docs: [12](../docs/protocol/12-quests.md) §5.
+
 ## Not working yet
 
-- Saving quest progress.
-  Quest passive/refund rewards and native Labyrinth/Altar acquisition (#151) remain missing.
+- Quest passive/refund rewards and native Labyrinth/Altar acquisition (#151) remain missing.
   Remaining special ascendancy gameplay and broader Phrecia client compatibility are separate work.
 - Tattoos: the 100-item 3.29.3b catalogue, protocol and implementation groups are documented in
   [tattoos](../docs/game/tattoos.md). The client flow is implemented: C->S `0x77` names the inventory, item and
