@@ -87,7 +87,12 @@ handler), `deser*.c` (component deserializers), `m*.c` (message classes), `gor*.
 | `scanvt.py` | `<func>` | every vtable whose slot 1 is `<func>` (with `0x14299e300` it lists the network handler groups) |
 | `finddisp.py` | `<lo> <hi> <substr>` | disassemble a range and show the instructions before each operand match, e.g. `"+ 0x980]"`. Found field writers the decompiler hid |
 | `statkeys.py` | `<key>…` | client code that reads a stat key (`mov edx, key` + call) |
-| `dispatch_ids.py` | `[id…]` | instance dispatcher id → switch case (byte table `0x142154e14`) |
+| `dispatch_ids.py` | `[id…]` | instance dispatcher id → switch case (this build's byte table, from `client_build.py`; `0x142154e14` is the 3.29.3b one) |
+
+`client_build.py` is the one place a Python tool asks which client build `Client/Game.exe` is and where that build's
+tables are. It hands out an address only after the region's own bytes look like the table, and refuses a client it
+cannot place ([3.29.3c diff](3.29.3c-client-diff.md)), so reading one build's address out of another build's image
+fails instead of printing code as a case number.
 
 Run with `python -I` (isolated) and add `-X utf8` when the output may contain non-ASCII (`dis.py` string hints).
 

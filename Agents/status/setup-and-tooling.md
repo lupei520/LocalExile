@@ -206,13 +206,22 @@ our own tools in `Tools/`, and how to install the third-party ones in [GettingSt
 ("Third-party tools").
 The full reverse-engineering setup has not yet been rebuilt from a fresh clone;
 if something is missing, fix the guide.
+An address a Python tool reads out of the client image comes from `scripts/re/client_build.py`, which refuses a
+`Game.exe` whose dispatcher table is not where that build has it.
+The tools used to hard-code one build's address, so another build's code at that address was printed as an answer.
+Code: `scripts/re/client_build.py`, `dispatch_ids.py`, `schema_md.py`.
 
 Every network message of the client is listed, in both directions, generated from the binary.
 S→C: [schema.md](../docs/protocol/schema.md), the four factories (instance 272, world 63, login 27, patch 6 classes),
 each equal to its factory switch's explicit cases.
 C→S: [c2s.md](../docs/protocol/c2s.md), instance 352, login 28 and patch 4 ids, from every caller of the stream flush.
-Its exact lengths match all 61 comparable ids of the Gateway's `KnownClientLength`.
-Code: `scripts/re/ghidra/ReadSchema.java`, `SendSites.java`, `scripts/re/schema_md.py`, `c2s_md.py`.
+Its exact lengths match all 83 comparable ids of the Gateway's `KnownClientLength`.
+The extraction is a 3.29.3b one and the client is 3.29.3c, so its instance ids move before the Gateway uses them (one
+higher from `0x2a8`, two higher from `0x2b0`).
+The Gateway frames a C→S read with every exact written length (`ClientMessageLengths`, 285 ids) after its hand-read
+arms, so a fixed-size message no longer ends framing with the rest of the read behind it.
+`scripts/re/c2s_lengths.py` writes that table, and refuses to when a length disagrees with the hand table.
+Code: `scripts/re/ghidra/ReadSchema.java`, `SendSites.java`, `scripts/re/schema_md.py`, `c2s_md.py`, `c2s_lengths.py`.
 
 Optional [native client control](../docs/dev/client-control.md) provides CLI/JSON RPC for development without repeated
 UI input.

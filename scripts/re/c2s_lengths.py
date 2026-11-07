@@ -21,6 +21,17 @@ OUT = os.path.join(REPO, "src", "GameServer.Core", "Protocol", "Instance", "Clie
 FIRST_INSERTED = 0x2A8
 SECOND_INSERTED = 0x2B0
 
+# That the document is a 3.29.3b extraction is checked, not assumed: its senders are addresses in the 3.29.3b image,
+# and DIFF names one of them moving (the leave-area ack's sender 0x142148690 becomes 0x14214f032). A document
+# regenerated against another build no longer carries this address, and shifting its ids again would quietly register
+# the wrong ones, so the shift is applied only to the extraction it was written for.
+EXTRACTED_SENDER = "0x142148690"
+
+
+def extraction_is_3_29_3b():
+    """Whether the document still is the 3.29.3b extraction whose ids this script shifts."""
+    return EXTRACTED_SENDER in open(DOC, encoding="utf-8").read()
+
 
 def supported_id(extracted):
     """The 3.29.3c id of a 3.29.3b id from the extraction."""
@@ -123,6 +134,11 @@ def render(table, hand):
 
 
 def main():
+    if not extraction_is_3_29_3b():
+        print(f"{DOC} does not carry the 3.29.3b sender {EXTRACTED_SENDER} any more, so it was probably regenerated "
+              f"against another build. Shifting its ids would register the wrong ones: fix the shift in this script "
+              f"before generating the table.", file=sys.stderr)
+        return 1
     extracted = doc_lengths()
     table = {supported_id(i): n for i, n in extracted.items()}
     assert len(table) == len(extracted), "two extracted ids collapse onto one"

@@ -3,11 +3,13 @@
 #   bash scripts/re/ghidra/g.sh ReadSchema.java 'C:\...\Tools\re\out\readschema.json' 'C:\...\Agents\docs\re\components.json'
 import json, os, re, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import client_build
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "Tools", "re", "out", "readschema.json")
 OUT = os.path.join(REPO, "Agents", "docs", "protocol", "schema.md")
 COMPONENTS = os.path.join(REPO, "Agents", "docs", "re", "components.json")
-EXE = os.path.join(REPO, "Client", "Game.exe")
 # The S→C factories: the instance connection's two groups, the login connection, and the patch connection (u8 ids).
 FACTORIES = {"0x1421b5c40": "instance", "0x1421c6150": "world", "0x14219c350": "login", "0x1428f74d0": "patch"}
 
@@ -78,16 +80,10 @@ def clean(d):
 
 
 def dispatch_cases():
-    try:
-        import pefile
-        pe = pefile.PE(EXE, fast_load=True)
-        data = open(EXE, "rb").read()
-        off = pe.get_offset_from_rva(0x142154e14 - pe.OPTIONAL_HEADER.ImageBase)
-        table = data[off:off + 0x2ed]
-        default = max(set(table), key=table.count)
-        return {i + 0xd: c for i, c in enumerate(table) if c != default}
-    except Exception:
-        return {}
+    # The dispatcher's case is per client build, and the table address is per build too: client_build verifies the
+    # table's bytes before it hands the address out, and refuses a client it cannot place. Read from the old address
+    # this silently returned whatever code lived there, so the "Dispatcher case" lines were meaningless.
+    return client_build.dispatch_cases()
 
 
 def main():
@@ -95,7 +91,10 @@ def main():
     S = d["summaries"]
     clean(d)
     comps = json.load(open(COMPONENTS))["registrations"]
-    cases = dispatch_cases()
+    try:
+        cases = dispatch_cases()
+    except client_build.UnsupportedClient as e:
+        raise SystemExit(str(e))
     printed, queue = set(), []
     L = []
 
