@@ -204,7 +204,7 @@ public sealed class GameFileSystem : IDisposable
     /// <summary>Read a raw (undecoded) file straight from the GGPK container, bypassing bundles.</summary>
     public static byte[] ReadRawGgpkFile(string ggpkPath, string path)
     {
-        using var ggpk = new GGPK(ggpkPath);
+        using var ggpk = new GGPK(new FileStream(ggpkPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete), false);
         return ReadGgpkFile(ggpk, path);
     }
 

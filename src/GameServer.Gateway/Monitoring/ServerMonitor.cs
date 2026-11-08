@@ -119,7 +119,25 @@ static class ServerMonitor
                 string? session = MarketSession.AccountOf(MarketSession.TokenOf(Header(request, "Authorization"), Query(query, "session")));
                 bool admin = MonitorGrant.Token is { } owner && (owner == Header(request, "X-Admin-Token") || owner == Query(query, "admin"));
                 string wanted = Query(query, "account") ?? "";
-                (string Body, string Type, int Status) answer = path switch
+                // The item pictures (data/item-art, extract-data.ps1's item-art entry): /art/<file> is the PNG itself,
+// cached a day — the exchange's order table asks one request per icon instead of a data URL each.
+                // The item pictures (data/item-art, extract-data.ps1 item-art): /art/<file> is the PNG itself,
+                // cached a day: the exchange table asks one request per icon instead of a data URL each.
+                                if (path.StartsWith("/art/", StringComparison.Ordinal) && method == "GET")
+                {
+                    if (ItemArt.Png(path[5..]) is not { } png)
+                    {
+                        await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+                        return;
+                    }
+                    string pictureHead = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: " + png.Length
+                        + "\r\nCache-Control: public, max-age=86400\r\nConnection: close\r\n\r\n";
+                    await stream.WriteAsync(Encoding.ASCII.GetBytes(pictureHead));
+                    await stream.WriteAsync(png);
+                    await stream.FlushAsync();
+                    return;
+                }
+(string Body, string Type, int Status) answer = path switch
                 {
                     "/" or "/index.html" => (Page, "text/html; charset=utf-8", 200),
                     "/state" => (Snapshot(), "application/json; charset=utf-8", 200),
@@ -160,7 +178,7 @@ static class ServerMonitor
                     "/grant" when method == "POST" => WithBody(request, element => (MonitorGrant.Write(element, out int grantStatus), "application/json; charset=utf-8", grantStatus)),
                     // The item forge (Monitoring/MonitorForge.cs): the crafting simulator at /forge and the data its
                     // page draws from; a composed item is granted like /grant above.
-                    "/forge" or "/forge/list" or "/forge/base" or "/forge/preview" =>
+                    "/forge" or "/forge/list" or "/forge/base" or "/forge/art" or "/forge/preview" =>
                         MonitorForge.Answer(path, method, query, method == "POST" ? BodyElement(request) : null)
                             ?? ("GET /forge for the page", "text/plain; charset=utf-8", 405),
                     // The world and loot tuning (Monitoring/MonitorTune.cs): the system settings an admin reads and
@@ -549,9 +567,10 @@ static class ServerMonitor
           <button id="xplace">挂单</button>
           <span id="xres" class="dim"></span>
         </div>
+        <div id="xpreview" class="row dim" style="align-items:center; min-height:44px;"></div>
         <table>
-          <thead><tr><th>谁</th><th>给</th><th>还剩</th><th>要</th><th>要多少</th><th>比例</th><th></th></tr></thead>
-          <tbody id="xbook"><tr><td colspan="7" class="empty">还没有挂单</td></tr></tbody>
+          <thead><tr><th>谁</th><th colspan="2">给</th><th colspan="2">要</th><th>还剩</th><th>要多少</th><th>比例</th><th></th></tr></thead>
+          <tbody id="xbook"><tr><td colspan="9" class="empty">还没有挂单</td></tr></tbody>
         </table>
         <h2>发放<small>放进「市场」页 · 需要密码</small></h2>
         <div class="row">
@@ -812,6 +831,7 @@ static class ServerMonitor
           let d;
           try { d = await (await api("/exchange", { cache: "no-store" })).json(); }
           catch (e) { return; }
+          exchangeIcons = d.icons || {};
           const names = d.currencies || [];
           const keep = (id, chosen) => {
             const el = $(id);
@@ -819,15 +839,32 @@ static class ServerMonitor
           };
           keep("#xgive", $("#xgive").value || "Chaos Orb");
           keep("#xwant", $("#xwant").value || "Divine Orb");
+          renderExchangePreview();
+          const icon = name => exchangeIcons[name] ? '<img src="' + exchangeIcons[name] + '" width="28" height="28" alt="' + esc(name) + '" title="' + esc(name) + '" style="vertical-align:middle">' : "";
           const rows = (d.orders || []).map(o =>
-            "<tr><td>" + esc(o.account) + "</td><td>" + esc(o.give) + "</td><td class=\"num\">" + o.giveLeft + "</td><td>"
-            + esc(o.want) + "</td><td class=\"num\">" + o.wantLeft + "</td><td class=\"dim\">" + esc(o.rate) + "</td>"
-            + "<td>" + (me && o.account === me ? "<button class=\"cancel\" data-id=\"" + o.id + "\">撤单</button>" : "") + "</td></tr>").join("");
+            "<tr><td>" + esc(o.account) + "</td>"
+            + "<td>" + icon(o.give) + "</td><td>" + esc(o.give) + "</td>"
+            + "<td>" + icon(o.want) + "</td><td>" + esc(o.want) + "</td>"
+            + '<td class="num">' + o.giveLeft + "</td>"
+            + '<td class="num">' + o.wantLeft + "</td>"
+            + '<td class="dim">' + esc(o.rate) + "</td>"
+            + "<td>" + (me && o.account === me ? '<button class="cancel" data-id="' + o.id + '">撤单</button>' : "") + "</td></tr>").join("");
           $("#xbook").innerHTML = rows
             ? rows + (d.mine && d.mine.length ? "" : "")
-            : "<tr><td colspan=\"7\" class=\"empty\">还没有挂单</td></tr>";
+            : '<tr><td colspan="9" class="empty">还没有挂单</td></tr>';
           for (const button of document.querySelectorAll("#xbook .cancel"))
             button.addEventListener("click", () => cancelOrder(button.dataset.id));
+        }
+        let exchangeIcons = {};
+        function renderExchangePreview() {
+          const give = $("#xgive").value, want = $("#xwant").value;
+          const giveN = parseInt($("#xgiveAmount").value, 10) || 0;
+          const wantN = parseInt($("#xwantAmount").value, 10) || 0;
+          const icon = name => exchangeIcons[name] ? '<img src="' + exchangeIcons[name] + '" width="36" height="36" alt="' + esc(name) + '" style="vertical-align:middle">' : "";
+          const rate = giveN > 0 && wantN > 0 ? (giveN / wantN).toFixed(2) + " : 1" : "";
+          $("#xpreview").innerHTML = "你的单：" + icon(give) + " <b>" + (giveN || "?") + " " + esc(give) + "</b>"
+            + " ⇄ " + icon(want) + " <b>" + (wantN || "?") + " " + esc(want) + "</b>"
+            + (rate ? ' <span class="dim">（' + rate + "）</span>" : "");
         }
         async function placeOrder() {
           if (!session) { $("#xres").textContent = "先登录再挂单"; return; }
@@ -858,6 +895,10 @@ static class ServerMonitor
           } catch (e) { $("#xres").textContent = "请求失败"; }
         }
         $("#xplace").addEventListener("click", placeOrder);
+        for (const id of ["xgive", "xwant", "xgiveAmount", "xwantAmount"]) {
+          $("#" + id).addEventListener("change", renderExchangePreview);
+          $("#" + id).addEventListener("input", renderExchangePreview);
+        }
         $("#lsignin").addEventListener("click", signIn);
         $('#lsignout').addEventListener('click', signOut);
         $('#mfind').addEventListener('click', loadMarket);

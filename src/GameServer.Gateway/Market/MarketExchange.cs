@@ -69,6 +69,11 @@ static class MarketExchange
                 if (Name(order.WantHash) is { Length: > 0 } want) names.Add(want);
             }
             foreach (string common in new[] { "Chaos Orb", "Divine Orb", "Exalted Orb", "Orb of Alchemy", "Orb of Fusing" }) names.Add(common);
+            // The book's pictures (Monitoring/ItemArt.cs): one entry per currency a page can show, name → /art file.
+            var icons = new JsonObject();
+            foreach (string name in names)
+                if (MarketNote.CurrencyType(Program.Items, name) is { } type && ItemArt.FileOf(type.Id) is { } file)
+                    icons[name] = "/art/" + file;
             return new JsonObject
             {
                 ["count"] = Book.Count,
@@ -76,6 +81,7 @@ static class MarketExchange
                 ["orders"] = orders,
                 ["mine"] = mine,
                 ["currencies"] = new JsonArray([.. names.Select(name => (JsonNode)name)]),
+                ["icons"] = icons,
             }.ToJsonString();
         }
     }
@@ -322,18 +328,25 @@ static class MarketExchange
         }
     }
 
-    static JsonObject View(Order order) => new()
+    static JsonObject View(Order order)
     {
-        ["id"] = order.Id,
-        ["account"] = order.Account,
-        ["league"] = order.League ?? "Standard",
-        ["give"] = Name(order.GiveHash),
-        ["giveLeft"] = order.LeftGive,
-        ["want"] = Name(order.WantHash),
-        ["wantLeft"] = order.LeftWant,
-        ["rate"] = $"{order.GiveAmount} {Name(order.GiveHash)} ← {order.WantAmount} {Name(order.WantHash)}",
-        ["placed"] = order.PlacedAt,
-    };
+        var giveType = Program.Items.ByHash(order.GiveHash);
+        var wantType = Program.Items.ByHash(order.WantHash);
+        return new()
+        {
+            ["id"] = order.Id,
+            ["account"] = order.Account,
+            ["league"] = order.League ?? "Standard",
+            ["give"] = Name(order.GiveHash),
+            ["giveArt"] = giveType is null ? null : ItemArt.FileOf(giveType.Id),
+            ["giveLeft"] = order.LeftGive,
+            ["want"] = Name(order.WantHash),
+            ["wantArt"] = wantType is null ? null : ItemArt.FileOf(wantType.Id),
+            ["wantLeft"] = order.LeftWant,
+            ["rate"] = $"{order.GiveAmount} {Name(order.GiveHash)} ← {order.WantAmount} {Name(order.WantHash)}",
+            ["placed"] = order.PlacedAt,
+        };
+    }
 
     static string Name(uint hash) => Program.Items.ByHash(hash)?.Name ?? "?";
 
