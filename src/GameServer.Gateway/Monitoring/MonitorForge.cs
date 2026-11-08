@@ -58,8 +58,10 @@ static class MonitorForge
         foreach (var line in ItemCrafter.Catalog(Program.Items, Program.Rolls, Program.Bench, Descriptions.Value))
             switch (line["type"]?.GetValue<string>())
             {
-                case "class": classes.Add(line["id"]!.DeepClone() is { } id && line["name"] is { } name
-                    ? new JsonObject { ["id"] = id, ["name"] = name } : null); break;
+                case "class":
+                    if (line["id"]!.DeepClone() is { } id && line["name"]!.DeepClone() is { } name)
+                        classes.Add(new JsonObject { ["id"] = id, ["name"] = name });
+                    break;
                 case "pool": pools.Add(new JsonObject
                 {
                     ["id"] = line["id"]!.DeepClone(),
@@ -111,7 +113,7 @@ static class MonitorForge
     {
         if (!MonitorGrant.Authorized(body, out int status, out string refusal))
             return (new JsonObject { ["ok"] = false, ["error"] = refusal }.ToJsonString(), JsonType, status);
-        if (!TryCompose(body, out string spec, out int level, out string account, out string? league, out string error))
+        if (!TryCompose(body, true, out string spec, out int level, out string account, out string? league, out string error))
             return (new JsonObject { ["ok"] = false, ["error"] = error }.ToJsonString(), JsonType, 400);
         string answer = MonitorGrant.Grant(account, league, spec, 1, level, out bool refused);
         return refused
@@ -125,7 +127,7 @@ static class MonitorForge
     {
         if (!MonitorGrant.Authorized(body, out int status, out string refusal))
             return (new JsonObject { ["ok"] = false, ["error"] = refusal }.ToJsonString(), JsonType, status);
-        if (!TryCompose(body, out string spec, out int level, out _, out _, out string error))
+        if (!TryCompose(body, false, out string spec, out int level, out string _account, out string? _league, out string error))
             return (new JsonObject { ["ok"] = false, ["error"] = error }.ToJsonString(), JsonType, 400);
         if (ItemCrafter.Build(Program.Items, Program.Rolls, spec, level, Random.Shared, out string? why) is not { } item)
             return (new JsonObject { ["ok"] = false, ["error"] = why ?? "the item could not be composed" }.ToJsonString(), JsonType, 400);
@@ -139,8 +141,9 @@ static class MonitorForge
     }
 
     /// <summary>Reads the request, checks the base and every affix against the vanilla rules, and writes the spec
-    /// <see cref="ItemCrafter.Build"/> takes (/item_give's JSON).</summary>
-    static bool TryCompose(JsonElement body, out string spec, out int level, out string account, out string? league, out string error)
+    /// <see cref="ItemCrafter.Build"/> takes (/item_give's JSON). <paramref name="needAccount"/> is a grant's rule: the
+    /// preview composes without one.</summary>
+    static bool TryCompose(JsonElement body, bool needAccount, out string spec, out int level, out string account, out string? league, out string error)
     {
         spec = ""; league = null; account = ""; level = 1;
         error = "";
@@ -148,7 +151,7 @@ static class MonitorForge
 
         account = String(body, "account");
         league = body.TryGetProperty("league", out var lg) && lg.ValueKind is JsonValueKind.String ? lg.GetString() : null;
-        if (string.IsNullOrWhiteSpace(account)) { error = "account is required"; return false; }
+        if (needAccount && string.IsNullOrWhiteSpace(account)) { error = "account is required"; return false; }
 
         string baseId = String(body, "base");
         if (string.IsNullOrWhiteSpace(baseId)) { error = "base is required"; return false; }
