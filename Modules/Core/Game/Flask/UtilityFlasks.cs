@@ -93,7 +93,8 @@ static partial class Game
         int Get(string name) => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
         double player = Math.Max(0, 100 + Get("base_item_found_quantity_+%") + Get("item_found_quantity_+%")) / 100.0;
         return player * (1 + Math.Max(0, monster?.KilledWithItemQuantityPct ?? 0) / 100.0)
-            * (MapDevice.Current(CharacterName(conn), conn.Layout.Hash)?.Mods.QuantityFactor ?? 1);
+            * (MapDevice.Current(CharacterName(conn), conn.Layout.Hash)?.Mods.QuantityFactor ?? 1)
+            * SystemSettings.Default.ItemQuantityMultiplier;
     }
 
     // The pools and the walk speed again (under the Monsters lock): after a utility flask effect started or ended, or the

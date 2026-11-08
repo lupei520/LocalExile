@@ -88,6 +88,19 @@ token set, or a different one, every write is refused, and the page carries a fo
 in game — a character in game sees it when it reopens the tab.
 Code: `src/GameServer.Gateway/Monitoring/MonitorGrant.cs`.
 
+An item can also be composed by hand at `GET /forge`: a three-column page (the craftable bases, the item slot, the affixes
+that base may roll at the chosen item level) where a row is the client's own sentence with each stat's roll range and the
+tier that base rolls it at. `GET /forge/base?base=<id>&ilvl=<n>` is that data for one base — the tiers are the market
+card's grouping, the wording `MonitorData.RangeText` — and it is fetched per base rather than as the whole catalog, which
+is what makes the page open at once. The game's rules are checked server-side: an affix must be in that base's pool at
+that item level (or the bench's own modifier of its class), two rolls of one affix line cannot share an item, prefixes and
+suffixes are capped as the rolls cap them (three and three, two and two on jewels, one and one on a magic item), and the
+base's implicit is composed with the item, since `ItemCrafter.Build` makes exactly the mods it is given. The second rule
+is not discoverable from the affix data alone: the life tiers carry no `Family` at all, so the family rule would let two
+of them on. `POST /forge/preview` answers the composed item's card and places nothing; `POST /forge` grants it like
+`/grant` above, with the same token.
+Code: `src/GameServer.Gateway/Monitoring/MonitorForge.cs` (the routes), `MonitorForgePage.cs` (the page).
+
 The market is the official one, indexed ([market.md](market.md)): `/market` is every item in a **public premium tab** that
 carries a price note, with the seller's online state, the filters (name, class, rarity, currency, price range, online
 only) and the trade site's whisper text; `/market/set` lists or unlists a tab, sets its note, or sets one item's own note.

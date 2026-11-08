@@ -50,6 +50,10 @@ sealed class SystemSettings
         ["drop_multiplier_unique_rarity"] = 1,
         ["monster_pack_density_multiplier"] = 1,
         ["monster_pack_size_multiplier"] = 1,
+        ["monster_rare_pack_chance"] = 6,
+        ["monster_magic_pack_chance"] = 12,
+        ["monster_min_rare_packs"] = 2,
+        ["item_quantity_multiplier"] = 1,
         ["experience_multiplier"] = 1,
         ["max_level"] = 100,
         ["tattoo_total_limit"] = 50,
@@ -138,6 +142,13 @@ sealed class SystemSettings
 
     public double MonsterPackDensityMultiplier => Math.Clamp(Get("monster_pack_density_multiplier"), 0, 100);
     public double MonsterPackSizeMultiplier => Math.Clamp(Get("monster_pack_size_multiplier"), 0, 50);
+
+    /// <summary>The percent of scattered packs that have a rare member / are all magic, and at least this many rare packs
+    /// in an area with scattered packs. Clamped so the two chances together stay at most 100.</summary>
+    public int MonsterRarePackChance => Math.Clamp(GetInt("monster_rare_pack_chance"), 0, 100);
+    public int MonsterMagicPackChance => Math.Clamp(GetInt("monster_magic_pack_chance"), 0, 100 - MonsterRarePackChance);
+    public int MonsterMinRarePacks => Math.Clamp(GetInt("monster_min_rare_packs"), 0, 1000);
+    public double ItemQuantityMultiplier => Math.Max(0, Get("item_quantity_multiplier"));
     public double ExperienceMultiplier => Math.Clamp(Get("experience_multiplier"), 0, 1000);
     public int MaxLevel => Math.Clamp(GetInt("max_level"), 1, Progression.MaxLevelCeiling);
 
@@ -236,6 +247,17 @@ sealed class SystemSettings
         {
             if (!double.IsFinite(value) || value < 0 || value > 50)
                 error = "monster_pack_size_multiplier is a number 0..50";
+        }
+        else if (key is "monster_rare_pack_chance" or "monster_magic_pack_chance" or "monster_min_rare_packs")
+        {
+            if (value < 0 || value > (key.Equals("monster_min_rare_packs", StringComparison.OrdinalIgnoreCase) ? 1000 : 100)
+                || value != Math.Round(value))
+                error = $"{key} is an integer 0..{(key.Equals("monster_min_rare_packs", StringComparison.OrdinalIgnoreCase) ? 1000 : 100)}";
+        }
+        else if (key.Equals("item_quantity_multiplier", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!double.IsFinite(value) || value < 0 || value > 100)
+                error = "item_quantity_multiplier is a number 0..100";
         }
         else if (key.Equals("experience_multiplier", StringComparison.OrdinalIgnoreCase))
         {

@@ -128,46 +128,62 @@ static class MonitorData
         if (rolled.Count > 0)
             foreach (string stat in rolled.Keys)
                 if (Descriptions.Value.For(stat) is { } description && Pick(description) is { } variant)
-                {
-                    // The template names a value either by the description's own stats ("{0}", "{1}") or by a handler
-                    // (a name and the stat it takes, written 1-based in the client's file).
-                    var named = new Dictionary<string, int>(StringComparer.Ordinal);
-                    for (int i = 0; i < description.Stats.Count; i++)
-                        if (rolled.TryGetValue(description.Stats[i], out int value))
-                        {
-                            named[i.ToString()] = value;
-                            named[description.Stats[i]] = value;
-                        }
-                    foreach ((string name, int index) in variant.Handlers)
-                        foreach (int slot in new[] { index - 1, index })
-                        {
-                            if (slot < 0 || slot >= description.Stats.Count || !rolled.TryGetValue(description.Stats[slot], out int value)) continue;
-                            named[name] = value;
-                            break;
-                        }
-                    return Fill(variant.Text, named);
-                }
+                    return Fill(variant.Text, Named(description, variant,
+                        rolled.ToDictionary(pair => pair.Key, pair => (pair.Value, pair.Value), StringComparer.Ordinal)));
         return Program.Items.Mods.Describe(mod);
+    }
+
+    /// <summary>A template's names bound to what the description's stats hold: its own stat ids and slot numbers ("0",
+    /// "1"), plus each handler's name (a handler is written 1-based in the client's file).</summary>
+    static Dictionary<string, (int Min, int Max)> Named(StatDescriptions.Description description, StatDescriptions.Variant variant,
+        Dictionary<string, (int Min, int Max)> values)
+    {
+        var named = new Dictionary<string, (int Min, int Max)>(StringComparer.Ordinal);
+        for (int i = 0; i < description.Stats.Count; i++)
+            if (values.TryGetValue(description.Stats[i], out var value))
+                named[i.ToString()] = named[description.Stats[i]] = value;
+        foreach ((string name, int index) in variant.Handlers)
+            foreach (int slot in new[] { index - 1, index })
+            {
+                if (slot < 0 || slot >= description.Stats.Count || !values.TryGetValue(description.Stats[slot], out var value)) continue;
+                named[name] = value;
+                break;
+            }
+        return named;
+    }
+
+    /// <summary>One mod's text with each value shown as its roll range (<c>+(100-120) to maximum Life</c>), which is what
+    /// a list of what an item <em>could</em> roll wants; the card above fills in what a mod did roll.</summary>
+    public static string RangeText(ModCatalog.Mod mod)
+    {
+        var ranges = new Dictionary<string, (int Min, int Max)>(StringComparer.Ordinal);
+        for (int i = 0; i < mod.Stats.Count; i++) ranges[mod.Stats[i].Id] = mod.RangeAt(i);
+        if (ranges.Count > 0)
+            foreach (string stat in ranges.Keys)
+                if (Descriptions.Value.For(stat) is { } description && Pick(description) is { } variant)
+                    return Fill(variant.Text, Named(description, variant, ranges));
+        // No template covers these stats: the raw ids, with the range each rolls in.
+        return $"{mod.Id}: " + string.Join(", ", mod.Stats.Select((stat, i) => $"{stat.Id} {mod.RangeAt(i).Min}-{mod.RangeAt(i).Max}"));
     }
 
     /// <summary>The template with every <c>{name}</c> filled, honouring the format the client writes after a colon
     /// (<c>{0:+d}</c> keeps the sign, <c>{0:.1f}</c> is a tenth: the game stores such stats ten times over).</summary>
-    static string Fill(string template, Dictionary<string, int> named) =>
+    static string Fill(string template, Dictionary<string, (int Min, int Max)> named) =>
         System.Text.RegularExpressions.Regex.Replace(template, @"\{([^}:]+)(?::([^}]*))?\}", match =>
-            named.TryGetValue(match.Groups[1].Value, out int value) ? Format(value, match.Groups[2].Success ? match.Groups[2].Value : null) : match.Value);
+            named.TryGetValue(match.Groups[1].Value, out var value) ? Format(value, match.Groups[2].Success ? match.Groups[2].Value : null) : match.Value);
 
-    /// <summary>A rolled value as the client prints it: signed when the template asks for it, scaled when it has decimals.</summary>
-    static string Format(int value, string? format)
+    /// <summary>A rolled value as the client prints it: signed when the template asks for it, scaled when it has decimals.
+    /// A range (its ends differ) is the client's bench's own <c>(min-max)</c>, with the template's sign written once
+    /// (<c>+(100-114)</c>).</summary>
+    static string Format((int Min, int Max) value, string? format)
     {
-        if (string.IsNullOrEmpty(format)) return value.ToString();
-        bool signed = format.StartsWith('+');
-        int decimals = format.Contains('.') ? format.Length - format.IndexOf('.') - 2 : 0;
-        if (decimals > 0)
-        {
-            double scaled = value / Math.Pow(10, decimals);
-            return (signed && scaled > 0 ? "+" : "") + scaled.ToString("0." + new string('0', decimals));
-        }
-        return (signed && value > 0 ? "+" : "") + value;
+        bool signed = format?.StartsWith('+') == true;
+        int decimals = format is { Length: > 0 } && format.Contains('.') ? format.Length - format.IndexOf('.') - 2 : 0;
+        string One(int raw) => decimals <= 0
+            ? raw.ToString()
+            : (raw / Math.Pow(10, decimals)).ToString("0." + new string('0', decimals));
+        string sign = signed && value.Min > 0 ? "+" : "";
+        return value.Min == value.Max ? sign + One(value.Min) : sign + $"({One(value.Min)}-{One(value.Max)})";
     }
 
     /// <summary>Where a mod's roll sits among the tiers this base can roll (1 is the highest), or 0 when the game data

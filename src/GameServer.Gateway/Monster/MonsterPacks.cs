@@ -228,10 +228,17 @@ static class AreaPopulation
 
     // One scattered pack per this many walkable cells (The Coast seed 1: 404 620 cells → 45 packs).
     public const int CellsPerPack = 9000;
-    // Percent of scattered packs that are magic (every member), and that have one rare member (the rest stay normal).
+    // The seed percentages of scattered packs that are magic (every member) and that have one rare member (the rest stay
+    // normal): an admin tunes them live with /game_data setting monster_rare_pack_chance / monster_magic_pack_chance.
     public const int MagicChance = 12, RareChance = 6;
-    // At least this many packs with a rare in an area that has scattered packs.
+    // The seed of at least this many packs with a rare in an area that has scattered packs.
     public const int MinRares = 2;
+
+    /// <summary>The live rare/magic pack chances and rare-pack floor (SystemSettings; the constants above are their seeds).</summary>
+    static (int Rare, int Magic, int MinRarePacks) Chances => (
+        SystemSettings.Default.MonsterRarePackChance,
+        SystemSettings.Default.MonsterMagicPackChance,
+        SystemSettings.Default.MonsterMinRarePacks);
     // Provisional reconstructed opening capture: 43 scattered monsters, Hillock and the tutorial zombie.
     // The first 35 seconds were not recorded; this is a calibration target, not a recovered server constant.
     public const int StrandMonsterTarget = 45;
@@ -364,9 +371,10 @@ static class AreaPopulation
             centres.Add(c);
             plans.Add((c, PickPack(packs, rng)));
         }
-        // Rarity per pack: rare (one rare member), magic (all members) or normal; at least MinRares rares.
-        var rarities = plans.Select(_ => RollRarity(rng.Next(100))).ToList();
-        for (int i = 0; rarities.Count(r => r == MonsterRarity.Rare) < Math.Min(MinRares, plans.Count) && i < 100; i++)
+        // Rarity per pack: rare (one rare member), magic (all members) or normal; at least the setting's rare-pack floor.
+        var (rareChance, magicChance, minRarePacks) = Chances;
+        var rarities = plans.Select(_ => RollRarity(rng.Next(100), rareChance, magicChance)).ToList();
+        for (int i = 0; rarities.Count(r => r == MonsterRarity.Rare) < Math.Min(minRarePacks, plans.Count) && i < 100; i++)
             rarities[rng.Next(plans.Count)] = MonsterRarity.Rare;
         Promote(rarities, MonsterRarity.Rare, scale.ExtraRare + (int)Math.Round(plans.Count * scale.RareIncrease / 100.0));
         Promote(rarities, MonsterRarity.Magic, scale.ExtraMagic + (int)Math.Round(plans.Count * scale.MagicIncrease / 100.0));
@@ -482,8 +490,8 @@ static class AreaPopulation
         return null;
     }
 
-    static MonsterRarity RollRarity(int roll) =>
-        roll < RareChance ? MonsterRarity.Rare : roll < RareChance + MagicChance ? MonsterRarity.Magic : MonsterRarity.Normal;
+    static MonsterRarity RollRarity(int roll, int rareChance = RareChance, int magicChance = MagicChance) =>
+        roll < rareChance ? MonsterRarity.Rare : roll < rareChance + magicChance ? MonsterRarity.Magic : MonsterRarity.Normal;
 
     static PackCatalog.Pack PickPack(List<(PackCatalog.Pack Pack, int Weight)> packs, Random rng)
     {

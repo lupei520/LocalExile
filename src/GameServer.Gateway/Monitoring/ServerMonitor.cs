@@ -158,14 +158,19 @@ static class ServerMonitor
                         ? MarketAdmin.Apply(element, own, out int ownStatus)
                         : MarketAdmin.Write(element, out ownStatus), "application/json; charset=utf-8", ownStatus)),
                     "/grant" when method == "POST" => WithBody(request, element => (MonitorGrant.Write(element, out int grantStatus), "application/json; charset=utf-8", grantStatus)),
-                    // The item forge (Monitoring/MonitorForge.cs): an admin composes an item from the base's own
-                    // affix pools and it is granted like /grant above; /forge/preview shows the card without placing.
-                    "/forge/catalog" or "/forge" or "/forge/preview" =>
-                        MonitorForge.Answer(path, method, method == "POST" ? BodyElement(request) : null)
-                            ?? ("POST a JSON body: {token, account, base, ...}", "text/plain; charset=utf-8", 405),
+                    // The item forge (Monitoring/MonitorForge.cs): the crafting simulator at /forge and the data its
+                    // page draws from; a composed item is granted like /grant above.
+                    "/forge" or "/forge/list" or "/forge/base" or "/forge/preview" =>
+                        MonitorForge.Answer(path, method, query, method == "POST" ? BodyElement(request) : null)
+                            ?? ("GET /forge for the page", "text/plain; charset=utf-8", 405),
+                    // The world and loot tuning (Monitoring/MonitorTune.cs): the system settings an admin reads and
+                    // writes live — drop multipliers, pack size, the rare/magic pack chances.
+                    "/tune" or "/tune/reset" =>
+                        MonitorTune.Answer(path, method, method == "POST" ? BodyElement(request) : null)
+                            ?? ("GET /tune, POST /tune {key, value}, POST /tune/reset {key?}", "text/plain; charset=utf-8", 405),
                     // Buying needs a signed-in buyer: that is who pays, and the seller never has to be here.
                     "/buy" when method == "POST" => WithBody(request, element => Buy(element, session)),
-                    "/grant" or "/market/set" or "/buy" or "/exchange/order" or "/exchange/cancel" or "/forge" or "/forge/preview" => ("POST a JSON body: {token, …}", "text/plain; charset=utf-8", 405),
+                    "/grant" or "/market/set" or "/buy" or "/exchange/order" or "/exchange/cancel" => ("POST a JSON body: {token, …}", "text/plain; charset=utf-8", 405),
                     _ => ("not found", "text/plain; charset=utf-8", 404),
                 };
                 byte[] body = Encoding.UTF8.GetBytes(answer.Body);
@@ -318,8 +323,9 @@ static class ServerMonitor
         return (MarketExchange.Cancel(account, id, out int status), json, status);
     }
 
-    /// <summary>One value from a request's query string (<c>?account=exile&amp;league=Standard</c>), or null.</summary>
-    static string? Query(string query, string key)
+    /// <summary>One value from a request's query string (<c>?account=exile&amp;league=Standard</c>), or null. The forge's
+    /// routes read theirs through this too, so a page's query string means one thing on this server.</summary>
+    internal static string? Query(string query, string key)
     {
         foreach (string pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -555,33 +561,18 @@ static class ServerMonitor
           <button id="ggive">发放</button>
           <span id="gres" class="dim"></span>
         </div>
-        <h2>自定义装备<small>原版词缀池 · 前缀后缀照稀有度上限 · 发放进「市场」页</small></h2>
+        <h2>自定义装备<small>做装模拟器：原版词缀池 · 前缀后缀照稀有度上限 · 发放进「市场」页</small></h2>
         <div class="row">
-          <select id="fclass"><option value="">全部类别</option></select>
-          <select id="fbase"><option value="">先选类别，再选底子</option></select>
-          <select id="frarity">
-            <option value="rare">稀有（各 3 词缀）</option>
-            <option value="magic">魔法（各 1 词缀）</option>
-            <option value="normal">普通（无词缀）</option>
-          </select>
-          <input id="filvl" type="number" value="84" min="1" max="100" title="物品等级：决定能出哪些词缀">
-          <input id="fquality" type="number" value="20" min="0" max="100" title="品质">
-          <input id="fsockets" placeholder="孔位，可空，如 R-R-G" spellcheck="false" title="和 /sockets 一样；留空按底子默认">
-          <input id="fstates" placeholder="状态，可空，如 corrupted, shaper" spellcheck="false" title="corrupted, mirrored, split, synthesised, shaper, elder, crusader, redeemer, hunter, warlord">
-          <input id="ftoken" type="password" placeholder="密码 = Game_MONITOR_ADMIN_TOKEN">
-          <button id="fload">载入词缀</button>
+          <span class="dim">挑底子、往物品槽里加词缀、预览再发给账号——在单独一页里做，地方大些。</span>
+          <button id="fopen">打开做装台</button>
+          <span class="dim">或直接开 <a href="/forge" target="_blank" rel="noopener">/forge</a></span>
         </div>
-        <div class="row" id="faffixrow" style="display:none">
-          <div id="faffixes" style="width:100%"></div>
-        </div>
-        <div class="row" id="fcardrow" style="display:none">
-          <div id="fcard" class="card open" style="display:block"></div>
-        </div>
+        <h2>世界与掉落调参<small>改完立即生效，不用重启 · 写入需要密码</small></h2>
+        <div id="tune"></div>
         <div class="row">
-          <button id="fpreview">预览</button>
-          <button id="fforge">发放</button>
-          <input id="faccount" placeholder="发给哪个账号" spellcheck="false" title="留空发给上面登录的账号">
-          <span id="fres" class="dim"></span>
+          <input id="ttoken" type="password" placeholder="密码 = Game_MONITOR_ADMIN_TOKEN">
+          <button id="treset">全部恢复默认</button>
+          <span id="tres" class="dim"></span>
         </div>
         <h2>最近日志</h2>
         <pre id="log"></pre>
@@ -883,138 +874,74 @@ static class ServerMonitor
           }, 250);
         });
         $('#msave').addEventListener('click', saveListing);
-        // ── 自定义装备（the forge）：原版词缀池里挑，发给指定账号 ──
-        let forge = { loaded: false, bases: [], mods: {}, pools: {}, chosen: [] };
-        const ftoken = () => $('#ftoken').value;
-        async function loadForgeCatalog(quiet) {
-          if (!quiet) $('#fres').textContent = '载入底子与词缀…';
-          let d;
-          try { d = await (await fetch('/forge/catalog', { cache: 'no-store' })).json(); }
-          catch (e) { $('#fres').textContent = '载入失败：服务器没应答'; return false; }
-          if (!d.ok) { $('#fres').textContent = '载入失败：' + d.error; return false; }
-          forge.bases = d.bases || [];
-          forge.mods = {};
-          for (const m of d.mods || []) forge.mods[m.id] = m;
-          forge.pools = {};
-          for (const p of d.pools || []) forge.pools[p.id] = p.mods || [];
-          const classes = [...new Set(forge.bases.map(b => b.class))].sort();
-          $('#fclass').innerHTML = '<option value="">全部类别</option>'
-            + classes.map(c => '<option>' + esc(c) + '</option>').join('');
-          fillBaseList();
-          forge.loaded = true;
-          if (!quiet) $('#fres').textContent = '底子 ' + forge.bases.length + ' 个，选好底子点「载入词缀」';
-          return true;
-        }
-        function fillBaseList() {
-          const want = $('#fclass').value;
-          const list = forge.bases.filter(b => !want || b.class === want);
-          const keep = $('#fbase').value;
-          $('#fbase').innerHTML = '<option value="">选底子</option>'
-            + list.map(b => '<option value="' + esc(b.id) + '"' + (b.id === keep ? ' selected' : '') + '>'
-              + esc(b.name) + '</option>').join('');
-        }
-        function currentBase() { return forge.bases.find(b => b.id === $('#fbase').value); }
-        function basePoolIds(base) {
-          // A base's affixes: its own pool plus whatever its influences open.
-          const ids = forge.pools[base.pool] ? [...forge.pools[base.pool]] : [];
-          for (const pid of Object.values(base.influence || {}))
-            for (const id of forge.pools[pid] || []) if (!ids.includes(id)) ids.push(id);
-          return ids;
-        }
-        function loadAffixes() {
-          const base = currentBase();
-          if (!base) { $('#fres').textContent = '先选一个底子'; return; }
-          const ilvl = parseInt($('#filvl').value, 10) || 84;
-          const ids = basePoolIds(base);
-          const rows = [];
-          for (const id of ids) {
-            const mod = forge.mods[id];
-            if (!mod || mod.generation !== 1 && mod.generation !== 2) continue;
-            if (mod.level > ilvl) continue; // the server refuses it anyway; the list only shows what can roll
-            const ranges = (mod.stats || []).map(s => (s.min === s.max ? s.min : s.min + '–' + s.max)).join(' / ');
-            rows.push('<div class="row faffix" data-id="' + esc(id) + '" style="margin-top:4px">'
-              + '<label style="min-width:290px"><input type="checkbox" class="faffixon"> ' + esc(mod.name || id) + '</label>'
-              + '<span class="dim" style="min-width:150px">Lv' + mod.level + ' · ' + (mod.generation === 1 ? '前缀' : '后缀') + '</span>'
-              + '<span class="dim" style="min-width:110px">' + esc(ranges) + '</span>'
-              + '<span class="fvals"></span></div>');
+        // 做装台是单独一页（/forge, Monitoring/MonitorForgePage.cs）：这一页只把入口放出来。
+        $('#fopen').addEventListener('click', () => window.open('/forge', '_blank', 'noopener'));
+        // 世界与掉落调参（/tune, Monitoring/MonitorTune.cs）：每组一行，改动即写、即生效。
+        const tuneBox = $('#tune');
+        const tuneKeys = {};
+        function renderTune(d) {
+          tuneBox.innerHTML = '';
+          for (const g of d.groups || []) {
+            const h = document.createElement('div');
+            h.className = 'dim';
+            h.style.marginTop = '6px';
+            h.textContent = g.group;
+            tuneBox.appendChild(h);
+            for (const k of g.keys || []) {
+              tuneKeys[k.key] = k;
+              const row = document.createElement('div');
+              row.className = 'row';
+              const label = document.createElement('span');
+              label.textContent = k.label;
+              label.style.minWidth = '150px';
+              const input = document.createElement('input');
+              input.type = 'number'; input.step = 'any'; input.value = k.value;
+              input.dataset.key = k.key; input.dataset.def = k.default;
+              const save = document.createElement('button');
+              save.textContent = '改';
+              const back = document.createElement('button');
+              back.textContent = '恢复';
+              const mark = document.createElement('span');
+              mark.className = 'dim';
+              const changed = Number(input.value) !== Number(k.default);
+              mark.textContent = changed ? '（已改，默认 ' + k.default + '）' : '';
+              const write = async value => {
+                mark.textContent = '…';
+                try {
+                  const r = await fetch('/tune', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: $('#ttoken').value, key: k.key, value: Number(value) }) });
+                  const j = await r.json();
+                  if (j.ok) { input.value = j.value; mark.textContent = Number(j.value) !== Number(k.default) ? '（已改，默认 ' + k.default + '）' : ''; }
+                  else mark.textContent = '✗ ' + (j.error || r.status);
+                } catch (e) { mark.textContent = '✗ ' + e; }
+              };
+              save.addEventListener('click', () => write(input.value));
+              back.addEventListener('click', async () => {
+                mark.textContent = '…';
+                try {
+                  const r = await fetch('/tune/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: $('#ttoken').value, key: k.key }) });
+                  const j = await r.json();
+                  if (j.ok) { input.value = k.default; mark.textContent = ''; }
+                  else mark.textContent = '✗ ' + (j.error || r.status);
+                } catch (e) { mark.textContent = '✗ ' + e; }
+              });
+              row.append(label, input, save, back, mark);
+              tuneBox.appendChild(row);
+            }
           }
-          $('#faffixrow').style.display = rows.length ? 'flex' : 'none';
-          $('#faffixes').innerHTML = rows.length ? rows.join('')
-            : '<span class="dim">这个底子在物品等级 ' + ilvl + ' 下没有可出的词缀</span>';
-          for (const row of document.querySelectorAll('#faffixes .faffix'))
-            row.querySelector('.faffixon').addEventListener('change', () => affixValues(row));
-          $('#fres').textContent = '按物品等级 ' + ilvl + ' 挑词缀，勾上可填数值（不填就随机），然后预览或发放';
         }
-        // A checked affix grows one input per stat, pre-filled at the range's top; unchecked takes it away again.
-        function affixValues(row) {
-          const box = row.querySelector('.fvals');
-          if (!row.querySelector('.faffixon').checked) { box.innerHTML = ''; return; }
-          const mod = forge.mods[row.dataset.id] || { stats: [] };
-          box.innerHTML = (mod.stats || []).map(s =>
-            '<input class="fvalue" type="number" value="' + (s.min === s.max ? s.min : s.max)
-            + '" min="' + s.min + '" max="' + s.max + '" title="' + s.min + '–' + s.max + '，清 0 按随机">').join(' ');
-        }
-        async function forgePreview() {
-          const body = forgeBody(false);
-          if (!body) return;
-          $('#fres').textContent = '预览中…';
+        (async () => { try { renderTune(await (await fetch('/tune', { cache: 'no-store' })).json()); } catch (e) { } })();
+        $('#treset').addEventListener('click', async () => {
+          $('#tres').textContent = '…';
           try {
-            const d = await (await fetch('/forge/preview', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-            })).json();
-            if (!d.ok) { $('#fres').textContent = '失败：' + d.error; return; }
-            $('#fcardrow').style.display = 'flex';
-            $('#fcard').innerHTML = (d.card || []).map(l =>
-              '<div class="' + esc(l.kind) + '">' + esc(l.text) + '</div>').join('');
-            $('#fres').textContent = '这是会发出去的样子（没填的数值已随机好）';
-          } catch (e) { $('#fres').textContent = '请求失败'; }
-        }
-        function forgeBody(needAccount) {
-          const base = currentBase();
-          if (!base) { $('#fres').textContent = '先选一个底子'; return null; }
-          const mods = [];
-          for (const row of document.querySelectorAll('#faffixes .faffix')) {
-            if (!row.querySelector('.faffixon').checked) continue;
-            const mod = forge.mods[row.dataset.id];
-            if (!mod) continue;
-            const values = [...row.querySelectorAll('.fvalue')].map(i => parseInt(i.value, 10) || 0);
-            mods.push(values.some(v => v !== 0) ? { id: mod.id, values: values } : { id: mod.id });
-          }
-          const body = {
-            token: ftoken(), base: base.id,
-            rarity: $('#frarity').value, itemLevel: parseInt($('#filvl').value, 10) || 84,
-            quality: parseInt($('#fquality').value, 10) || 0,
-            mods: mods,
-          };
-          if ($('#fsockets').value.trim()) body.sockets = $('#fsockets').value.trim();
-          const states = $('#fstates').value.split(',').map(s => s.trim()).filter(s => s);
-          if (states.length) body.states = states;
-          const account = $('#faccount').value.trim() || who();
-          if (needAccount) {
-            if (!account) { $('#fres').textContent = '写一个要发放给的账号'; return null; }
-            body.account = account;
-          }
-          return body;
-        }
-        async function forgeGive() {
-          const body = forgeBody(true);
-          if (!body) return;
-          $('#fres').textContent = '发放中…';
-          try {
-            const d = await (await fetch('/forge', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-            })).json();
-            if (d.ok) {
-              $('#fres').textContent = '已放进「' + d.tabName + '」页：' + d.item;
-              await loadStash(body.account);
-            } else $('#fres').textContent = '失败：' + d.error;
-          } catch (e) { $('#fres').textContent = '请求失败'; }
-        }
-        $('#fclass').addEventListener('change', fillBaseList);
-        $('#fload').addEventListener('click', () => { (forge.loaded ? Promise.resolve() : loadForgeCatalog(false)).then(loadAffixes); });
-        $('#fpreview').addEventListener('click', forgePreview);
-        $('#fforge').addEventListener('click', forgeGive);
-        // ── end of the forge ──
+            const r = await fetch('/tune/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: $('#ttoken').value }) });
+            const j = await r.json();
+            $('#tres').textContent = j.ok ? '已恢复 ' + (j.restored || []).length + ' 项' : '✗ ' + (j.error || r.status);
+            if (j.ok) renderTune(await (await fetch('/tune', { cache: 'no-store' })).json());
+          } catch (e) { $('#tres').textContent = '✗ ' + e; }
+        });
         for (const id of ['mq', 'mcur', 'mmin', 'mmax', 'monline', 'mstats', 'mclass', 'mrarity']) $('#' + id).addEventListener('change', loadMarket);
         $('#ggive').addEventListener('click', async () => {
           const body = {

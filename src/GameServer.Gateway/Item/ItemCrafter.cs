@@ -32,7 +32,7 @@ static class ItemCrafter
     public static IEnumerable<JsonObject> Catalog(ItemCatalog items, ItemRolls rolls, BenchCrafting bench, StatDescriptions descriptions,
         string folder = "data")
     {
-        var classNames = LoadClassNames(folder);
+        var classNames = ClassNames(folder);
         var bases = items.All.Where(t => Craftable(items, t)).ToList();
         var pools = new Dictionary<string, int>(StringComparer.Ordinal);
         var poolLines = new List<JsonObject>();
@@ -132,7 +132,8 @@ static class ItemCrafter
             yield return new JsonObject { ["type"] = "word", ["list"] = w.List, ["key"] = w.Key, ["text"] = w.Text };
     }
 
-    static Dictionary<string, string> LoadClassNames(string folder)
+    /// <summary>ItemClasses.json: a base's class id to the name a page or a tool shows it as.</summary>
+    internal static Dictionary<string, string> ClassNames(string folder = "data")
     {
         string path = Path.Combine(folder, "tables", "ItemClasses.json");
         if (!File.Exists(path)) return [];
