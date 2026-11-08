@@ -157,6 +157,9 @@ listener.Start();
 Console.WriteLine($"[gateway] listening on {bind}:{port}");
 
 using var cts = new CancellationTokenSource();
+// The read-only monitor page (Monitoring/ServerMonitor.cs): 127.0.0.1, this port + 1 unless Game_MONITOR_PORT says
+// otherwise (0 = none). Nothing of the game waits on it.
+ServerMonitor.Start(cts.Token);
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 // What waits in memory to be saved (experience, flask charges from kills) is saved every few seconds, and at the end.
 var saving = SaveUnsavedProgress(cts.Token);

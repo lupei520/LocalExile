@@ -281,6 +281,14 @@ function execute(request) {
       try { logoutButton(loginState, ptr(0)); } catch (_) {}
       return {submitted: true};
     }
+    case 'rawpacket': {
+      // Dev-only: send one instance message with the given bytes, for protocol tests the UI would otherwise drive
+      // (party invite 0x93, accept 0x95, decline, kick...). Capped, and only while in an area.
+      if (current.screen !== 'game' || current.instanceState !== 3) throw new Error('rawpacket requires an active area');
+      const b = request.bytes;
+      if (!Array.isArray(b) || b.length < 2 || b.length > 1024) throw new Error('Invalid raw packet');
+      sendPacket(b, 'instance'); return {submitted: true};
+    }
     case 'chat':
       if (current.screen !== 'game' || current.instanceState !== 3) throw new Error('Chat requires an active area');
       if (!Array.isArray(request.bytes) || request.bytes.length > 8192) throw new Error('Invalid chat message');

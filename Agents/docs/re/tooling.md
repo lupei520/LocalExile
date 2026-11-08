@@ -348,3 +348,29 @@ How 3.29.3b → 3.29.3c was ported; every step maps from evidence, nothing by of
    name (`byte_table_0x…`) is not matched. `rewrite_message_ids.py <report.tsv> --shift first:last:delta …` moves
    message ids; its report needs reading line by line, since stat keys, offsets after another id (`0x22 + 0x2b9`) and
    ClientStrings rows share the range. Re-check every script's code signature against the new executable.
+## 12. 3.29.3c: the 3.29.3b addresses do not apply
+
+Most notes in `Agents/docs/re/` and `Agents/docs/protocol/` were derived from the 3.29.3b image. The client this
+checkout runs is 3.29.3c: not only do the message ids shift by +2 ([3.29.3c diff](3.29.3c-client-diff.md)), the
+**absolute addresses move too**, so a documented address is not a starting point in the 3.29.3c `Game.exe`.
+Checked 2026-11-08 on the 3.29.3c image with `scripts/re/findrefs.py`: no RIP-relative reference exists to the
+instance dispatcher's byte table (`0x142154e14` in 3.29.3b), to the 0xa9/0xa7 readers, or even to the login key blobs
+— addresses the 3.29.3b notes say are referenced. Re-finding a structure in 3.29.3c means finding it from scratch.
+
+For that, these lookups need no full analysis pass (each is a chunked capstone scan, run with `python -I` so the
+repository's `scripts/re/dis.py` does not shadow the standard library's `dis`):
+
+| Script | What it finds |
+|---|---|
+| `findrefs.py <addr>...` | the instructions that reference an address through a RIP-relative operand |
+| `findswitch.py` | `jmp`/`call` through `[reg*8 + disp]` whose entries point back into `.text` (switch jump tables) |
+| `findtables.py` | byte tables that look like a dispatcher's case table (a dominant default value, small case numbers) |
+| `finddisptable.py` | the same shape without the code side; too loose on its own |
+
+Ghidra notes for this checkout (a full analysis of the 79 MB image was attempted twice and did not finish):
+Ghidra 12.2 needs **JDK 25** (`Ghidra/application.properties: application.java.min=25`); its own settings, the JDK's
+`user.home` and `%TEMP%` all have to point inside the repository when the analysis is started from a restricted
+token, and the repository path contains a space, so the launcher must be given the 8.3 short path
+(`F:\LOCALE~1`). `scripts/re/ghidra/import-game3293.cmd` and `gh.cmd` set all of that up; a `-analysisTimeoutPerFile`
+cap makes the import finish and save (`gh-write.cmd` keeps a script's disassembly). The analyzer pass stalls in its
+decompiler-based analyzers on this image, so plan on a capped pass plus the scripts above rather than a complete one.

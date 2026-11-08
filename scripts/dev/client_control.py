@@ -849,6 +849,13 @@ class ClientControl:
             else:
                 packet = [0x00, 0x36, 0x00, 0x00, node >> 8, node & 0xff, flags, 0]
             return self.rpc("chat", bytes=packet)
+        if command == "rawpacket":
+            # Dev-only: one instance message, byte for byte, for the protocol tests the UI would otherwise drive
+            # (party invite 0x93, accept 0x95, decline, kick): the bridge caps it at 1024 bytes.
+            data = request.get("bytes")
+            if not isinstance(data, list) or not 2 <= len(data) <= 1024:
+                raise ValueError("bytes must be a list of 2..1024 integers")
+            return self.rpc("rawpacket", bytes=[int(b) & 0xff for b in data])
         raise ValueError(f"Unknown command: {command}")
 
 
