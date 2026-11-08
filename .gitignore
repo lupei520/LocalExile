@@ -91,3 +91,13 @@ desktop.ini
 /scripts/re/levelgen/loads-latest.json
 
 *.iml
+
+# scratch from monitor testing
+catalog.json
+forge-*.json
+preview.json
+give.json
+stash.json
+launch-live.ps1
+launch-live*.log
+build-*.log
