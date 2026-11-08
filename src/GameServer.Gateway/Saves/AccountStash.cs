@@ -38,9 +38,13 @@ sealed partial class AccountStash
 
     /// <summary>A tab: name, StashType row, colour, items, and its affinities (a bitset of StashTabAffinityId rows, set in the
     /// tab settings, C→S 0xd3).</summary>
-    /// <summary>A tab as saved. <paramref name="Position"/>: its button's place in the panel (C→S 0xcc), null for its index.</summary>
+    /// <summary>A tab as saved. <paramref name="Position"/>: its button's place in the panel (C→S 0xcc), null for its index.
+    /// <paramref name="Public"/> and <paramref name="Note"/> are the market's (Agents/docs/dev/market.md): a premium tab
+    /// the owner made public, its price note, and a note per item id for the items priced apart from the tab
+    /// (<see cref="SetPublic"/>, <see cref="SetNote"/>, <see cref="SetItemNote"/>).</summary>
     public sealed record SavedTab(string Name, byte Type, byte R, byte G, byte B, List<CharacterSaves.SavedPlacement> Items, uint Affinities = 0,
-        ushort? Position = null, uint Colour = 0, ulong UniqueCategory = 0, ushort Parent = ushort.MaxValue);
+        ushort? Position = null, uint Colour = 0, ulong UniqueCategory = 0, ushort Parent = ushort.MaxValue, bool Public = false,
+        string? Note = null, Dictionary<uint, string>? ItemNotes = null);
 
     /// <summary>LeagueQuestFlags: the league quest flags (client ids, Quests.League) the account's characters set in this
     /// stash's league, such as a Trial of Ascendancy's: every character of the league has them.</summary>
@@ -308,6 +312,96 @@ sealed partial class AccountStash
     /// <summary>Every tab but the free normal ones (StashType 0) and folders (16) is premium, as bought tabs are in the real
     /// game: the tab settings then offer the name and colour (record flag 0x02).</summary>
     static bool IsPremium(byte type) => type is not (0 or 16);
+
+    /// <summary>The index of the tab with this name, making it as a premium tab when the stash has none (the market's own
+    /// page, which is where a grant and a sale put their item). Saves, because the new tab is the stash's from now on.</summary>
+    public int EnsureTab(string name, byte type = 1)
+    {
+        int index;
+        lock (_lock)
+        {
+            index = _tabs.FindIndex(tab => string.Equals(tab.Saved.Name, name, StringComparison.Ordinal));
+            if (index >= 0) return index;
+            if (_tabs.Count >= ushort.MaxValue) throw new InvalidOperationException("Too many stash tabs");
+            index = _tabs.Count;
+            _tabs.Add(new TabState(new SavedTab(name, type, 0x8a, 0x2b, 0xe2, [])));
+        }
+        Persist();
+        return index;
+    }
+
+    /// <summary>Whether a tab is public: a premium one the owner listed, which is all the market indexes
+    /// (Agents/docs/dev/market.md).</summary>
+    public bool IsPublic(int tab)
+    {
+        lock (_lock) return tab >= 0 && tab < _tabs.Count && IsPremium(_tabs[tab].Saved.Type) && _tabs[tab].Saved.Public;
+    }
+
+    /// <summary>A tab's note: the price its items take when they have none of their own, or null.</summary>
+    public string? TabNote(int tab) { lock (_lock) return tab >= 0 && tab < _tabs.Count ? _tabs[tab].Saved.Note : null; }
+
+    /// <summary>An item's own note in a tab, or null. It beats the tab's, as in the game.</summary>
+    public string? ItemNote(int tab, uint itemId)
+    {
+        lock (_lock)
+            return tab >= 0 && tab < _tabs.Count && _tabs[tab].Saved.ItemNotes is { } notes && notes.TryGetValue(itemId, out string? note)
+                ? note : null;
+    }
+
+    /// <summary>The item ids in a tab that carry a note of their own.</summary>
+    public IReadOnlyList<uint> NotedItems(int tab)
+    {
+        lock (_lock)
+            return tab >= 0 && tab < _tabs.Count && _tabs[tab].Saved.ItemNotes is { } notes ? [.. notes.Keys] : [];
+    }
+
+    /// <summary>Lists or unlists a premium tab. False for no such tab, or one that cannot be public at all.</summary>
+    public bool SetPublic(int tab, bool on)
+    {
+        lock (_lock)
+        {
+            if (tab < 0 || tab >= _tabs.Count || !IsPremium(_tabs[tab].Saved.Type)) return false;
+            if (_tabs[tab].Saved.Public == on) return true;
+            _tabs[tab].Saved = _tabs[tab].Saved with { Public = on };
+        }
+        Persist();
+        return true;
+    }
+
+    /// <summary>Sets a premium tab's note (the price of the items in it that have none of their own), or clears it with
+    /// null. A note longer than <see cref="MaxNote"/> is refused: the game's own window has a limit too.</summary>
+    public bool SetNote(int tab, string? note)
+    {
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (note is { Length: > MaxNote }) return false;
+        lock (_lock)
+        {
+            if (tab < 0 || tab >= _tabs.Count || !IsPremium(_tabs[tab].Saved.Type)) return false;
+            if (_tabs[tab].Saved.Note == note) return true;
+            _tabs[tab].Saved = _tabs[tab].Saved with { Note = note };
+        }
+        Persist();
+        return true;
+    }
+
+    /// <summary>Sets an item's own note in a tab, or removes it with null. False for a tab or item that is not there.</summary>
+    public bool SetItemNote(int tab, uint itemId, string? note)
+    {
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (note is { Length: > MaxNote }) return false;
+        lock (_lock)
+        {
+            if (tab < 0 || tab >= _tabs.Count || !IsPremium(_tabs[tab].Saved.Type) || !_tabs[tab].Items.Any(item => item.Id == itemId)) return false;
+            var notes = _tabs[tab].Saved.ItemNotes is { } have ? new Dictionary<uint, string>(have) : [];
+            if (note is null) notes.Remove(itemId); else notes[itemId] = note;
+            _tabs[tab].Saved = _tabs[tab].Saved with { ItemNotes = notes.Count > 0 ? notes : null };
+        }
+        Persist();
+        return true;
+    }
+
+    /// <summary>How long a price note may be (the game's own window limits it as well).</summary>
+    public const int MaxNote = 200;
 
     /// <summary>Renames a premium tab (C→S 0xcd). False for no such tab, a tab that is not premium or an empty name.</summary>
     public bool Rename(int tab, string name)

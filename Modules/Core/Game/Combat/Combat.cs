@@ -558,6 +558,16 @@ static partial class Game
                 still: () => acknowledged = SkillAcknowledgementAllowed(conn, gem.Effect, use.SkillId,
                     () => cooldownUse?.CommitNativeUse(conn, use.SkillId) ?? PlayerActionCurrent(conn, action)));
             if (!projectileRuntime && !acknowledged) return;
+            // The monster was already dead when this use arrived (a held button keeps sending uses at the corpse for
+            // up to a few hundred ms: 33 of a live session's 45 zero-hit sweeps, 2026-11-07) or died during the walk-up.
+            // The swing is echoed as the ordinary attack echoes it (Attack's own "if (m.Life == 0) return"), but a
+            // corpse takes no hit and pays no cost, instead of spending the skill's mana on a wave that cannot land.
+            if (!projectileRuntime && (m.Dead || m.Life == 0))
+            {
+                Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name} on 0x{use.TargetId:x}: already dead, " +
+                    $"no hit and no cost (t={conn.Clock.Elapsed.TotalSeconds:0.000})");
+                return;
+            }
             if (!projectileRuntime) _ = CastGemSkill(remote, stream, ciphers, conn, use.SkillId, stop, target, use.TargetId, sequence: use.Sequence,
                 actionToken: action, cooldownUse: cooldownUse);
             return;

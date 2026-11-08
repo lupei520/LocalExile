@@ -1,4 +1,6 @@
 using GameServer.Core.Protocol.Instance;
+using GameServer.Core.Protocol.Login;
+using GameServer.Modding;
 
 namespace GameServer.Modules.PlayerBots;
 
@@ -20,7 +22,10 @@ sealed partial class BotDirector
         lock (_bots)
         {
             bot = _bots.FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase)
-                && b.Leader is null && b.Shown.Contains(conn.Instance));
+                && b.Leader is null
+                // Visible to this player, or at least standing in the town they are in: a module reload clears Shown
+                // until the bot's next publish, which otherwise makes an invite fail for a bot the player can see.
+                && (b.Shown.Contains(conn.Instance) || string.Equals(b.Town, conn.Layout.Id, StringComparison.OrdinalIgnoreCase)));
             if (bot is null) return false;
             party = _bots.FirstOrDefault(b => ReferenceEquals(b.Leader, conn))?.Party ?? unchecked((uint)Interlocked.Increment(ref _nextParty));
             Hide(bot);
@@ -50,6 +55,8 @@ sealed partial class BotDirector
 
     // C→S 0x97 from a player who leads a bot party: logged (its layout is not known yet); a kick names the member, so a
     // bot whose account or name is in it leaves.
+    // C->S 0x94 from a player who leads a bot party: a compact wstr member name (captured live 2026-11-08 from the
+    // panel's Kick). A bot whose name matches leaves the party.
     public async Task<bool> Kick(ClientState conn, byte[] message)
     {
         Bot? kicked;
@@ -58,9 +65,13 @@ sealed partial class BotDirector
         {
             var members = _bots.Where(b => ReferenceEquals(b.Leader, conn) && b.Phase == BotPhase.Following).ToList();
             if (members.Count == 0) return false;
-            _console($"bots: 0x0097 from {Program.CharacterName(conn)}: {Convert.ToHexString(message)}");
-            string text = System.Text.Encoding.Unicode.GetString(message, 2, message.Length - 2 & ~1);
-            kicked = members.FirstOrDefault(b => text.Contains(b.Account, StringComparison.OrdinalIgnoreCase) || text.Contains(b.Name, StringComparison.OrdinalIgnoreCase));
+            string text = new LoginReader(message.AsSpan(2)).WStr();
+            _console($"bots: 0x0094 kick \"{text}\" from {Program.CharacterName(conn)}");
+            if (text.Length == 0) return false;
+            kicked = members.FirstOrDefault(b => string.Equals(b.Account, text, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(b.Name, text, StringComparison.OrdinalIgnoreCase)
+                || text.Contains(b.Account, StringComparison.OrdinalIgnoreCase)
+                || text.Contains(b.Name, StringComparison.OrdinalIgnoreCase));
             if (kicked is null) return false;
             party = kicked.Party;
             Depart(kicked, "исключён из группы");
@@ -70,6 +81,15 @@ sealed partial class BotDirector
     }
 
     // Out of the party: to the nearest way out of the area it is in, then on with its quests (StepWithLeader).
+    /// <summary>'/botleave': every bot following this player leaves and goes back to its quests. Returns whether there
+    /// was a bot party of theirs.</summary>
+    public async Task<bool> LeaveAny(ClientState conn)
+    {
+        uint? party;
+        lock (_bots) party = _bots.FirstOrDefault(b => ReferenceEquals(b.Leader, conn))?.Party;
+        return party is uint p && await Leave(conn, p);
+    }
+
     void Depart(Bot bot, string why)
     {
         bot.Phase = BotPhase.Departing;
@@ -123,6 +143,10 @@ sealed partial class BotDirector
     const byte PartyMemberByte = 1, PartyLeaderByte = 2;
 
     static Task Send(ClientState conn, byte[] bytes, string? log) => conn.Outbox is { } outbox ? outbox(bytes, log) : Task.CompletedTask;
+
+    /// <summary>A chat line back to the player who ran a bot command.</summary>
+    public Task Tell(IPlayer player, string text) =>
+        Send(Program.ConnOf(player), InstanceChat.ChatLine(text), $"0x0017 {text}");
 
     // A party bot's step (under the bots' lock): beside its leader wherever they are, wandering within FollowRange and
     // catching up when further; leaving, to its way out. A leader gone takes it back to its quests.

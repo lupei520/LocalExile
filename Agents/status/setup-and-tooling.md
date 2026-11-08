@@ -75,6 +75,23 @@ Part of [Status](../Status.md); what to build next in this area is in
 
 ## Partly working
 
+- Server monitor: a read-only page on 127.0.0.1 (the Gateway's port + 1, or `Game_MONITOR_PORT`) with the players in
+  game, the log's last lines, and an account's stash with its gold and currency total; `/state`, `/accounts` and
+  `/stash?account=` are the same data as JSON, a token-guarded `POST /grant` puts currency or an item into the account's
+  `市场` tab, and a market made of public premium tabs (`/market`, `POST /market/set`) lists their priced items with the
+  trade site's filters and whisper text — the game's own rules, so a normal tab cannot be listed and an item whose note
+  has no `~` stays off the index. A player signs in with the game's own account and password, `POST /buy` trades with
+  nobody in game (the buyer pays from their own stash, the item moves between the two market tabs, the fee is gold), and
+  `POST /exchange/order` is Faustus's book: the offer is escrowed, an opposite order fills it whole or in part, and
+  cancelling returns what is left.
+  Checked with a headless browser and a Gateway on private ports, everything against a copy of the save database (a stack
+  merged onto the pile already there, equipment into free cells, a listed tab searched back, an item's note overriding the
+  tab's, an unpriced item dropping out, a buy that paid, moved the item and charged the fee, a second buy of the same
+  item refused, one account reading another's stash refused, and the rows read back from the copy); a player row from a
+  real client in game is not seen yet.
+  Code: `src/GameServer.Gateway/Monitoring/`, `src/GameServer.Gateway/Market/`.
+  Docs: [debugging](../docs/dev/debugging.md) ("The monitor"), [market](../docs/dev/market.md).
+
 - Linux: `live.ps1` and `extract-data.ps1` run under PowerShell 7 and the client under Proton
   ([GettingStarted](../GettingStarted.md#linux)). Verified: the extraction, the three test suites, the servers with hot
   reload, and the real client logging in and playing on the Coast. `build-release.ps1` under pwsh builds a linux-x64

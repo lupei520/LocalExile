@@ -4,9 +4,9 @@ using GameServer.Core.Protocol.Instance;
 
 /// <summary>
 /// The global and trade chat channels of each character, and the echo of what a player types
-/// (Agents/docs/protocol/10-chat-and-commands.md §1, §2). There is one player per server, so a channel only holds its own
-/// lines: the server answers each join (C→S 0x134) with S→C 0x135 and sends every typed line back as an S→C 0x17 line
-/// from the character, on the channel it was typed in.
+/// (Agents/docs/protocol/10-chat-and-commands.md §1, §2). A typed line is echoed to its author and, when others are on
+/// the same channel, to them as well (S→C 0x17 with the speaker's name; "local" goes to the player's own instance, the
+/// two numbered channels to every character on that number).
 /// </summary>
 sealed class ChatChannels
 {
@@ -46,6 +46,14 @@ sealed class ChatChannels
     /// without the language name).</summary>
     public static string JoinedText(ChatChannelKind kind, ushort channel) =>
         $"You have joined {(kind == ChatChannelKind.Global ? "global" : "trade")} chat channel {channel}.";
+
+    /// <summary>Whether this character is on the given channel number: another player's line reaches it.</summary>
+    public bool IsOn(string character, ChatChannelKind kind, ushort channel) =>
+        _chosen.TryGetValue((character.ToUpperInvariant(), kind), out var c) && c.Channel == channel;
+
+    /// <summary>The channel number this character is on, or <see cref="DefaultChannel"/> before it joined.</summary>
+    public ushort ChannelOf(string character, ChatChannelKind kind) =>
+        _chosen.TryGetValue((character.ToUpperInvariant(), kind), out var c) ? c.Channel : DefaultChannel;
 
     /// <summary>
     /// The S→C 0x17 line that shows the player's own typed line (C→S 0x15 without a slash), or null when there is nothing

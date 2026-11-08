@@ -251,8 +251,8 @@ needed for the rest of the quest; the quest log starts at `a2q6-ReceivedQuest`.
 | 3 | Piety runs off (cutscene) | 1_2_6_2 | `PietySins` Transitionable → 2 (her run, then the portal and the runes) | `a2q6-SeenPiety` (assumed) | no table setter. a2q11's log and Sister Cassia's rows use it |
 | 4 | Kill Fidelitas | 1_2_6_2 | kill MV 154 `Metadata/Monsters/DemonFourLegged/BossFourLeggedDemon` | `a2q6-KilledDemon` | server `OnMonsterKilled` |
 | 5 | Helena climbs up | 1_2_6_2 | `HelenaSins` Transitionable 1 → 2 (`halyna_climbUp`, becomes targetable) | - | after the kill (inferred from her .ot) |
-| 6 | Talk to Helena | 1_2_6_2 | NPCTalk 457 "Rescued" (not HaveSkillGem, not RescuedHelena), Script `triggerer.FinishNPCChat();` | `a2q6-RescuedHelena` | row 456 is the same with the gem carried |
-| 7 | The Strange Device opens | 1_2_6_2 | `Metadata/Chests/QuestChests/Helena/PoisonCart` (Chests 188) state 2 (targetable) → open (state 3) | drops `PoisonSkillGem` | state 2 after the rescue (assumed) |
+| 6 | Talk to Helena | 1_2_6_2 | NPCTalk 457 "Rescued" (not HaveSkillGem, not RescuedHelena), Script `triggerer.FinishNPCChat();` | `a2q6-RescuedHelena` | row 456 is the same with the gem carried, so step 6 is optional before step 7; HelenaSins leaves with RescuedHelena |
+| 7 | The Strange Device opens | 1_2_6_2 | `Metadata/Chests/QuestChests/Helena/PoisonCart` (Chests 188) state 2 (targetable) → open (state 3) | drops `PoisonSkillGem` | state 2 after Fidelitas' death (`a2q6-KilledDemon`), not the rescue: row 456 needs the gem without RescuedHelena |
 | 8 | Pick up the Baleful Gem | 1_2_6_2 | pick up `Metadata/Items/QuestItems/PoisonSkillGem` (BIT 1543) | `a2q6-HaveSkillGem` (grant), `a2q6-HelenaInTown` (extra) | `remove_flag a2q9-PoisonedTree` |
 | 9 | Helena in town | 1_2_town | NPCTalk 462 "Rescued" (`HelenaTown`, no conditions) | `HelenaIntroduced` | QS Order 1 |
 | 10 | Greust | 1_2_town | NPCTalk 153 "Helena" (needs HelenaInTown, not QuestRewardTaken) | `a2q6-Congratulated` | |
@@ -308,7 +308,8 @@ STEPS = [
 - `a2b-StartNewQuests` has no known setter (above). Without it Greust never offers the quest, but nothing later
   checks `a2q6-ReceivedQuest`: the driver can skip step 1 and still finish.
 - HelenaSins is an out-of-town NPC with a Transitionable state. The PoisonCart is a room-object chest with
-  Transitionable. Neither is created today.
+  Transitionable. The server creates both (`Act2.cs`); the device opening on the kill, and Helena leaving on
+  RescuedHelena rather than the gem's HelenaInTown, are inferred from NPCTalk 456/457, not observed natively.
 - `a2q6-SeenHelena`, `a2q6-SeenPiety` and `a2q6-KilledDemon` have no table setter: they need sight and kill hooks.
 - The server places `HelenaTown` from the town room from the start. The real game presumably shows her only after the
   rescue; how is unknown. That is harmless for the driver.

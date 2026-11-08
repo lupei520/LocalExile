@@ -1097,12 +1097,21 @@ static partial class Game
                     double now = conn.Clock.Elapsed.TotalSeconds;
                     if (!HitReaction.TryFlinch(m, stun, now, Random.Shared)) return null;
                     float seconds = (float)(m.FlinchUntil - now);
+                    // The clip this variety's extraction names (MonsterCatalog.TakeHit: "S→C 0x1b2 kind 0 plays one of
+                    // them on the Animated component and the clip's own SoundEvents play with it"), sent beside the
+                    // Actor recovery the recovery's duration bounds. The ACT alone chose the clip before; whether naming
+                    // it plays the flinch better (or fights the recovery) is what task-4's P2 A/B measures, so a build
+                    // without these two lines is the control.
+                    var clip = HitReaction.Clip(m);
+                    var animation = InstanceProtocol.ActorAnimation(id, seconds, PlayerHitRecovery.TakeHitAnimation);
+                    byte[] flinch = clip is { } chosen
+                        ? [.. animation, .. InstanceProtocol.AnimationUpdate(id, 0, (uint)chosen.Index, 1f)]
+                        : animation;
                     if (log) Console.WriteLine($"[gateway] {remote} => 0x01d1 monster 0x{id:x} TakeHit recovery {seconds:0.000} s, " +
-                        $"action {m.ActionGeneration}, recovery until {m.FlinchUntil:0.000}");
-                    // Animation.dat row 5 selects TakeHit through this actor's native ACT. Keep clip selection and
-                    // completion with Actor recovery instead of following it with a rig-only 0x1b2 override.
-                    var flinch = InstanceProtocol.ActorAnimation(id, seconds, PlayerHitRecovery.TakeHitAnimation);
-                    BroadcastMonsterMessage(conn, id, flinch);
+                        $"action {m.ActionGeneration}, recovery until {m.FlinchUntil:0.000}"
+                        + (clip is { } shown ? $", 0x1b2 clip {shown.Index} ({shown.Seconds:0.###} s long)" : ""));
+                    // Another player mirrors the actor recovery alone: the mirrored buffer is one message.
+                    BroadcastMonsterMessage(conn, id, animation);
                     return flinch;
                 }
             });

@@ -87,6 +87,40 @@ Part of [Status](../Status.md); what to build next in this area is in
   Unknown message layouts and existing 0x0099 handling remain unchanged.
   Docs: [instance framing](../docs/protocol/02-instance-connection.md#fixed-message-boundaries-across-tcp-reads).
 
+- Other machines, over a LAN or a tunnel: `live.ps1 -Lan` binds the servers to 0.0.0.0 and tells remote clients the
+  public address and ports (`-PublicAddress`, `-PublicLoginPort`, `-PublicPort`), while a connection from this PC keeps
+  127.0.0.1 and the local port; the GGPK's gateway list stays local, and a remote player's tool answers the patching
+  hello on their own PC.
+  Code: `live.ps1`, `GatewayEndpoint.PublicPort`, `InstanceTransfer.ConnectInstance`, `Modules/Core/Game/World/Travel.cs`.
+  Docs: [LAN play](../docs/dev/lan-play.md).
+- Chat reaches the other players: a line typed without a prefix goes to the player's own instance, `#` and `$` to
+  every character on the same global or trade channel number, `%` to the player's party, each as an S→C 0x17 line from
+  the speaker.
+  Verified 2026-11-08 with three null-renderer clients in one town: the receiving client's log shows the line
+  (`#WwhExile: …`, `WwhExile: …`, `TestBot2: …`), the local and global channels in one pass and the party channel to
+  all three members; the trade channel's line reaches every character on its number (the client prints it only in the
+  Trade tab).
+  Code: `Modules/Core/Game/Player/Chat.cs`, `ChatChannels.cs`, `Modules/Core/Player/Social/SocialModule.cs`.
+  Docs: [10](../docs/protocol/10-chat-and-commands.md).
+- Party: invite (C→S 0x93), accept (0x95) and leave (0x96) with the party list (0xa9) and the party modifiers (0x231);
+  an invite from a player who is already in a party joins that party, so a third member lands in the same one, and a
+  member keeps their place through an area change.
+  Verified 2026-11-08 with three clients: both invites carry party 0x101, the accept gives all three the same 0xa9
+  (`WwhExile, TestBot, TestBot2`) and 0x231 reports 3 players.
+  `/travel <character name>` moves the player to that character's area and instance (verified: a player in the town
+  travelled into the beach instance another one was in).
+  `/invite`, `/leave`, `/kick <name>`, `/promote <name>` and `/decline` do the party panel's operations from chat; kick
+  sends the removed member 0xaa (the leave message) and the leader transfer reorders 0xa9 so that member is first with
+  status 2.
+  Verified 2026-11-08 with three clients: `/invite` twice (the second reuses party 0x101 once the first is accepted),
+  `/promote` (0xa9 now lists TestBot first), `/kick` (the kicked member gets 0xaa, the other two the 2-player party),
+  `/leave` (the last member gets the disbanded notice) and `/decline` (the invite is dropped, the inviter gets 0xaa for
+  that id, and a later accept answers "no such invite").
+  The party panel's area column ("Travelling...") and its travel button remain
+  ([roadmap](../roadmap/world.md)).
+  Code: `Modules/Core/Player/Social/SocialModule.cs`, `Modules/Core/Player/Commands/CommandsFeature.cs`.
+  Docs: [28](../docs/protocol/28-player-trade.md).
+
 ## Partly working
 
 - League isolation is enforced by full league for towns and instance selection.

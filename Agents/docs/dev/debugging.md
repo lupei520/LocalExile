@@ -62,6 +62,56 @@ faulted one attack later), and the server only sees the disconnect, so these are
 
 Set it in the PowerShell session before `live.ps1`, for example `$env:Game_TRACE = 'move,packets'`.
 
+## The monitor
+
+The Gateway serves a read-only page at `http://127.0.0.1:<port>/` — its own port + 1, so `live.ps1 -PortBase N` gives
+N+5, or `Game_MONITOR_PORT` (`0` turns it off; a port already taken is one log line, never a stopped Gateway). Once a
+second it shows the run's uptime, port and managed memory, one row per connection in game (character, level, area, cell,
+life, the area's monsters, time in game) and the last 40 lines of `logs\\live-gateway.log`. `/state` is that data as JSON.
+
+It only reads what the server already publishes (`Program.InGame`, `PlayerLife`, the walk estimate) and answers GET, so
+a page left open costs a player nothing and cannot change a game. To change one, use a chat command
+([10](../protocol/10-chat-and-commands.md)).
+Code: `src/GameServer.Gateway/Monitoring/ServerMonitor.cs`.
+
+Beside the page it answers `/state` (the same data as JSON), `/accounts` (the save database's accounts and their
+characters) and `/stash?account=<name>&league=<league>` (that account's stash: tabs, items, gold and a currency total).
+The last two read a stash through the same `AccountStash` the game does, by account rather than by connection — a market
+or a gift does not need the player in game — and name every item with the id the stash gave it (`0x40000000` and up).
+Code: `src/GameServer.Gateway/Monitoring/MonitorData.cs`.
+
+A grant is the one write: `POST /grant` with `{"token":…,"account":"exile","item":"Chaos Orb","count":5,"level":1}`
+composes the item (equipment through `ItemCrafter`, exactly as `/item_give` does; a stack is the base type's own item, so
+currency and fragments work too) and puts it into the account's `市场` tab, making that tab when the stash has none.
+Currency fills the pile already in the tab before it starts another. The token is `Game_MONITOR_ADMIN_TOKEN`: with no
+token set, or a different one, every write is refused, and the page carries a form for it. Nothing here needs the player
+in game — a character in game sees it when it reopens the tab.
+Code: `src/GameServer.Gateway/Monitoring/MonitorGrant.cs`.
+
+The market is the official one, indexed ([market.md](market.md)): `/market` is every item in a **public premium tab** that
+carries a price note, with the seller's online state, the filters (name, class, rarity, currency, price range, online
+only) and the trade site's whisper text; `/market/set` lists or unlists a tab, sets its note, or sets one item's own note.
+Only a premium tab can be listed, an item's own note beats the tab's, and a note without the leading `~` keeps the item
+off the index — the game's own rules, because the listing *is* the item in the tab.
+Code: `src/GameServer.Gateway/Market/`.
+
+A player signs in at the page with the account and password the game itself takes (`Market/MarketSession.cs`,
+`AccountService.Login`): the token that comes back is what lets them list their own tabs and buy, and anything else needs
+the owner's admin token — the account list, a grant, and another account's stash. `Game_MONITOR_BIND` names the address
+the page listens on (loopback unless it is set; `live.ps1 -Lan` sets 0.0.0.0 so the people on the network can trade there).
+
+`POST /buy` is the trade with nobody in game (`Market/MarketTrade.cs`): the buyer pays the listing's price from their own
+stash, the item moves out of the seller's tab into the buyer's market tab, and the seller's proceeds go into theirs. A
+listing is bought whole, one trade runs at a time in the process, and the fee is gold, as Faustus charges, scaled by the
+price (`Game_MARKET_FEE_BPS`, hundredths of a percent: 500 = 5%).
+
+`GET /exchange`, `POST /exchange/order` and `POST /exchange/cancel` are Faustus's book on the page
+(`Market/MarketExchange.cs`): an order says what it gives and what it wants, the currency it offers leaves the stash when
+the order is placed and waits there, an opposite order at an equal or better rate fills it (in part when that is all
+there is), both sides are paid into their market tabs and the gold fee is taken from each for what it receives, and
+cancelling returns what is left. Orders are saved in the account's own stash (`AccountStash.ChangeModuleData`, key
+`market.exchange`), so a restart keeps the book.
+
 ## Client crashes
 
 1. Read the end of `logs\live-gateway.log`: the `DISCONNECT` line and the `last … packet(s)` block before it, and the

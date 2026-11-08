@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "maxBots": 100,
   "spawnIntervalSeconds": 60,
   "firstSpawnSeconds": 60,
