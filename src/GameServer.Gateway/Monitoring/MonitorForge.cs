@@ -34,11 +34,11 @@ static class MonitorForge
             case "/forge/catalog" when method == "GET":
                 return (ForgeCatalog(), JsonType, 200);
             case "/forge" when method == "POST":
-                return body is { } asked ? Forge(asked.Value) : plain("a JSON body is required", 400);
+                return body is { } asked ? Forge(asked) : plain("a JSON body is required", 400);
             case "/forge" when method != "POST":
                 return plain("POST a JSON body: {token, account, base, ...}", 405);
             case "/forge/preview" when method == "POST":
-                return body is { } preview ? Preview(preview.Value) : plain("a JSON body is required", 400);
+                return body is { } preview ? Preview(preview) : plain("a JSON body is required", 400);
             case "/forge/preview":
                 return plain("POST a JSON body: {token, base, ...}", 405);
             default:

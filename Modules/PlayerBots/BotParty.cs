@@ -1,5 +1,4 @@
 using GameServer.Core.Protocol.Instance;
-using GameServer.Core.Protocol.Login;
 using GameServer.Modding;
 
 namespace GameServer.Modules.PlayerBots;
@@ -53,11 +52,9 @@ sealed partial class BotDirector
         return true;
     }
 
-    // C→S 0x97 from a player who leads a bot party: logged (its layout is not known yet); a kick names the member, so a
-    // bot whose account or name is in it leaves.
-    // C->S 0x94 from a player who leads a bot party: a compact wstr member name (captured live 2026-11-08 from the
-    // panel's Kick). A bot whose name matches leaves the party.
-    public async Task<bool> Kick(ClientState conn, byte[] message)
+    // C→S 0x94 from a player who leads a bot party: a compact wstr member name (captured live 2026-11-08 from the
+    // panel's Kick; InstanceSocial.ReadPartyKick reads it). A bot whose account or name is in it leaves the party.
+    public async Task<bool> Kick(ClientState conn, string name)
     {
         Bot? kicked;
         uint party;
@@ -65,13 +62,12 @@ sealed partial class BotDirector
         {
             var members = _bots.Where(b => ReferenceEquals(b.Leader, conn) && b.Phase == BotPhase.Following).ToList();
             if (members.Count == 0) return false;
-            string text = new LoginReader(message.AsSpan(2)).WStr();
-            _console($"bots: 0x0094 kick \"{text}\" from {Program.CharacterName(conn)}");
-            if (text.Length == 0) return false;
-            kicked = members.FirstOrDefault(b => string.Equals(b.Account, text, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(b.Name, text, StringComparison.OrdinalIgnoreCase)
-                || text.Contains(b.Account, StringComparison.OrdinalIgnoreCase)
-                || text.Contains(b.Name, StringComparison.OrdinalIgnoreCase));
+            _console($"bots: 0x0094 kick \"{name}\" from {Program.CharacterName(conn)}");
+            if (name.Length == 0) return false;
+            kicked = members.FirstOrDefault(b => string.Equals(b.Account, name, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase)
+                || name.Contains(b.Account, StringComparison.OrdinalIgnoreCase)
+                || name.Contains(b.Name, StringComparison.OrdinalIgnoreCase));
             if (kicked is null) return false;
             party = kicked.Party;
             Depart(kicked, "исключён из группы");
