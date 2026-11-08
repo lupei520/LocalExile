@@ -162,7 +162,7 @@ public class InstanceEntitiesTests
         // Without the hit-data bit only the first part is written.
         Assert.Equal("01AF" + "00003000" + "00000000" + "0000" + "0007" + "00" + "00" + "00003001" + "0000" + "01",
             Convert.ToHexString(InstanceProtocol.ActionHit(0x3000, 7, 0x3001, kind: 0x01)));
-        // flags 0x400 puts a u16 (+0x34) before the hit code (reader 0x1419bd6f0: flags >> 10 & 1), as the monster hit
+        // flags 0x400 puts a u16 (+0x34) before the hit code (reader 0x1419c2100: flags >> 10 & 1), as the monster hit
         // on the player sends it; kind bits 2/3 add a u16 each after the angle.
         Assert.Equal("01AF" + "00003000" + "00000000" + "0000" + "FFFF" + "00" + "00" + "00003001" + "4601" + "0E" + "01C2" + "00" + "40" + "0001" + "0002",
             Convert.ToHexString(InstanceProtocol.ActionHit(0x3000, 0xffff, 0x3001, flags: 0x4601, kind: 0x0e, u34: 450, angle: 0x40,
@@ -266,7 +266,7 @@ public class InstanceEntitiesTests
         var shown = states.Set("boss_life_bar", 1).Set("aggro", 1).Set("no_such_state", 1);
         Assert.Equal([1, 0, 0, 1], shown.SharedStates);
         Assert.Equal([0, 0, 0, 0], states.SharedStates);
-        // 0x2ba, object 0x3000, u32 0, u16 0, blob16 (length 11): component 11, counts 04 00, states value + flags.
+        // 0x2bc, object 0x3000, u32 0, u16 0, blob16 (length 11): component 11, counts 04 00, states value + flags.
         Assert.Equal("02BC" + "00003000" + "00000000" + "0000" + "000B" + "0B" + "0400" + "0102" + "0000" + "0000" + "0102",
             Convert.ToHexString(InstanceEntities.StateMachineUpdate(0x3000, 11, shown)));
     }
@@ -611,7 +611,7 @@ public class InstanceEntitiesTests
     [Fact]
     public void Outside_a_town_the_area_transition_has_no_compact_int()
     {
-        // 0x141e5b870 reads the int only when the current area is a town (WorldAreas +0x14): The Coast's exit to The Mud
+        // 0x141e5fdc0 reads the int only when the current area is a town (WorldAreas +0x14): The Coast's exit to The Mud
         // Flats is the town exit's 41 bytes less that one.
         var town = new AreaTransitionObject(GridX: 384, GridY: 217, DestinationHash16: 0x7ad2) { InTown = true }.Blob();
         byte[] b = new AreaTransitionObject(GridX: 384, GridY: 217, DestinationHash16: 0x7ad2).Blob();

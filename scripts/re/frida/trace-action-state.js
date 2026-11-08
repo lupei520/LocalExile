@@ -4,7 +4,7 @@
 // SNAPSHOT_MS, sending the u32 words that changed and whether it is still the actor's current action (+0x1b0); and
 // for the same window counts the calls to the class's own virtual functions (FUNCTIONS) with their last return value.
 // Shield Charge (3.29.3c): VTABLE 0x14332f508, type 0x2bc0; FUNCTIONS are the entries it overrides from Move's
-// base-class vtable.
+// 0x1434bca70.
 const VTABLE = '0x14332f508';
 const FUNCTIONS = ['0x1413c9340', '0x1413c9540', '0x141b59550', '0x141b59840', '0x141a6e4f0',
   '0x141a6ea70', '0x1413c9470', '0x141a6e480', '0x141b592b0', '0x141a6f5b0', '0x141a6f5e0', '0x1413c9030',

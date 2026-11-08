@@ -1,4 +1,4 @@
-// Paste after common.js. Logs the 0x2b9 blob, the created object's component vtables in order, and the blob reader
+// Paste after common.js. Logs the 0x2bb blob, the created object's component vtables in order, and the blob reader
 // position on entry/exit of each component deserializer (Agents/docs/protocol/04-player-entity.md).
 const names = {'0x1435ab608':'Positioned','0x1435e7f88':'Comp1','0x1435b3800':'Pathfinding','0x1435a7a20':'Comp3',
   '0x1435b0d98':'Life','0x1435af9c0':'Animated','0x143470e78':'Player','0x1435aa590':'Comp7','0x1435a6cb8':'Inventories',

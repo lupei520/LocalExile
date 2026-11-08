@@ -17,7 +17,8 @@ static class SkillArea
     /// no gem grants (see GroundSlamWave).</summary>
     public static int BaseRadius(string? effect, Func<string, int> get) =>
         get("active_skill_base_area_of_effect_radius") is int radius and > 0 ? radius
-            : effect == "VaalGroundSlam" ? 40 : IsCyclone(effect) ? 16 : effect == "RollingMagma" ? 14 : 12;
+            : effect == "VaalGroundSlam" ? 40 : IsCyclone(effect) ? 16 : effect == "RollingMagma" ? 14
+            : effect == "FireTrap" ? 15 : effect == "StormblastMine" ? 20 : 12;
 
     static readonly string[] MoreArea =
     [
@@ -99,9 +100,10 @@ static class GroundSlamWave
     /// gem's own per-level active_skill_base_radius_+ is added to the length, so a higher-level gem reaches further.</summary>
     public const int GenericAreaRadius = 12;
 
-    /// <summary>The wave's half angle in degrees before <c>ground_slam_angle_+%</c>: half of the cone
-    /// <c>ground_slam_cone_angle_override</c> names (60 degrees across, not on each side), which no player stat set
-    /// carries, so it is a constant here.</summary>
+    /// <summary>The wave's half angle in degrees before <c>ground_slam_angle_+%</c>. The client's
+    /// <c>ground_slam_cone_angle_override</c> is 60 (Stats.json); playing it showed misses with monsters plainly in
+    /// front until 60 was read as the half angle, so the wave spans 120 degrees across. Upstream's main reads it as the
+    /// whole cone (half angle 30): keep 60 here when merging upstream in.</summary>
     public const double HalfAngleDegrees = 60;
 
     /// <summary>How fast the wave's front travels, in cells a second (10 cells = 1 m). ESTIMATE: no table carries a

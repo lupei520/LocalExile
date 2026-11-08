@@ -3,7 +3,7 @@
 // action's vtable, and, the first time an action vtable is seen, hooks on that vtable's skill-specific continuation
 // (+0x680, +0x520), final stage (+0x590), bounce (+0x768) and chain budget (+0x638) entries, each logged with its result.
 // The ordinary chain path (0x141bb2ce0 → 0x141bb14f0 → 0x141bb1d30) is hooked too. Observation only.
-// Rolling Magma (3.29.3c, 2026-11-01): its ground bounces never reached the ordinary chain path; cast at empty ground,
+// Rolling Magma (3.29.3b, 2026-11-01): its ground bounces never reached the ordinary chain path; cast at empty ground,
 // then at monsters, and compare.
 const m = Process.getModuleByName('Game.patched.exe');
 const at = va => m.base.add(ptr(va).sub(ptr('0x140000000')));

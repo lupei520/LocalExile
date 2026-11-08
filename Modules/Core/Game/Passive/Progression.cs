@@ -137,6 +137,7 @@ static partial class Game
                             $"{w.Id} {ItemsFor(conn).ByHash(w.Item.TypeHash)?.Name} (str {w.Strength}, dex {w.Dexterity}, int {w.Intelligence}, level {w.Level})")));
             }
         sources = WithLinks(conn, GameEvents.WithPlayerStatSources(conn, WithQuestStats(conn, WithAntiquarian(conn, WithFortification(conn, WithCharges(conn, WithSupportGemBuffs(conn, sources)))))));
+        sources = WithSummonBuffs(conn, sources);
         lock (conn.Monsters)
         {
             double now = conn.Clock.Elapsed.TotalSeconds;
@@ -203,7 +204,7 @@ static partial class Game
         IReadOnlyDictionary<string, bool> conditionFlags;
         lock (conn.Monsters)
         {
-            auraEffects = StatConditions.AuraSet(conn.Auras.Values.Select(a => a.EffectId));
+            auraEffects = StatConditions.AuraSet(AffectingAuras(conn).Select(a => a.EffectId));
             conditionNow = conn.Clock.Elapsed.TotalSeconds;
             recentEvents = conn.RecentEvents.Snapshot(conditionNow);
             recentExpiry = conn.RecentEvents.NextExpiry(conditionNow);
@@ -717,7 +718,7 @@ static partial class Game
             BodyEnergyShield = converted.EnergyShield == 0 ? 0 : body.EnergyShield,
         };
         List<AuraCatalog.Aura> auras;
-        lock (conn.Monsters) auras = [.. conn.Auras.Values];
+        lock (conn.Monsters) auras = AffectingAuras(conn);
         var aura = AuraCatalog.Bonus(auras.Where(a => a.AffectsSelf), bonus.AuraEffectPct, SkillsFor(conn), Stats);
         // Match CharacterPlayerStats: a dev value replaces the complete raw passive/equipment/aura input.
         // Read raw replacements once, preserving independent mana and incoming-hit consumers.
@@ -813,6 +814,8 @@ static partial class Game
             CriticalStrikeChancePct = attackIncrease,
             SpellCriticalStrikeChancePct = spellIncrease,
             AttackSpeedPct = bonus.AttackSpeedPct + aura.AttackSpeedPct,
+            SpellBlockChance = bonus.SpellBlockChance + (activeWeapon.Shield
+                ? auras.Where(a => a.EffectId == "TempestShield").Select(a => ReservationStat(conn, a, "shield_spell_block_%")).DefaultIfEmpty(0).Max() : 0),
             MovementVelocityPct = bonus.MovementVelocityPct + aura.MovementVelocityPct + ShieldChargeMovementPct(conn)
         };
         // Running utility flasks and Mageblood's permanent ones combined before one strongest-per-effect pass: the same
@@ -826,7 +829,7 @@ static partial class Game
         if (Stats.Key(LabyrinthTrials.ArrowSlowStat) is uint arrowSlow && sources.GetValueOrDefault(arrowSlow) is int slowFinal and not 0)
             bonus = bonus with { MovementVelocityPct = (int)Math.Round((100.0 + bonus.MovementVelocityPct) * (100 + slowFinal) / 100) - 100 };
         // "Movement Speed cannot be modified to below Base Value" (PoB CalcDefence: max(mod, 1)). The client bounds
-        // movement_velocity_+% below by 0 instead of -100 from the same raw flag (0x14251cbd0).
+        // movement_velocity_+% below by 0 instead of -100 from the same raw flag (0x142523780).
         if (EquipmentInput("movement_speed_cannot_be_reduced_below_base") != 0)
             bonus = bonus with { MovementVelocityPct = Math.Max(0, bonus.MovementVelocityPct) };
         if (conn.God)
@@ -1023,7 +1026,7 @@ static partial class Game
             + Get("mana_reservation_efficiency_+%") + Get("reservation_efficiency_+%");
         int lifeReservation = Get("base_life_reservation_efficiency_+%") + Get("base_reservation_efficiency_+%")
             + Get("life_reservation_efficiency_+%") + Get("reservation_efficiency_+%");
-        // Absolution's increase counts while the player has a linked target, as the client's 0x142822db0 adds it.
+        // Absolution's increase counts while the player has a linked target, as the client's 0x142829960 adds it.
         int auraEffect = Get("non_curse_aura_effect_+%") + Get("aura_effect_+%")
             + Get("aura_effect_on_self_from_your_skills_+%")
             + (Get("number_of_active_links") > 0 ? Get("non_curse_aura_effect_+%_while_linked") : 0);
@@ -1065,7 +1068,7 @@ static partial class Game
             ShieldArmourPct: Get("shield_physical_damage_reduction_rating_+%"),
             ShieldEvasionPct: Get("shield_evasion_rating_+%"),
             ShieldEnergyShieldPct: Get("shield_maximum_energy_shield_+%"),
-            // Despite its name, shield_armour_+% increases all shield defences (native 0x142724c50).
+            // Despite its name, shield_armour_+% increases all shield defences (native 0x14272b800).
             // combined_shield_defences_+% is the native derived value, not a second additive source.
             SharedShieldDefencesPct: Get("shield_armour_+%"),
             NoShieldDefences: Get("minions_get_shield_stats_instead_of_you") != 0
@@ -1230,6 +1233,71 @@ static partial class Game
             if (removable < 0) throw new AscendancyRuleException("Ordinary passives cannot be reduced to the level's point budget");
             nodes.RemoveAt(removable);
         }
+    }
+
+    // Chooses the main ascendancy (/ascendancy, the Ascendancy Chamber's class selector) and saves it; the caller reloads
+    // the area to show its tree. An AscendancyRuleException leaves everything as it was.
+    internal static void SelectMainAscendancy(ClientState conn, AscendancyCatalog.Definition chosen)
+    {
+        byte baseClass = (byte)Skills.ClassFor(conn.ClassRow).IntegerId;
+        AscendancyClientCompatibility.RequirePlayable(conn, chosen.Identity);
+        lock (conn.Monsters)
+        {
+            using var availability = AscendancyPolicies.Enter(conn, chosen.Identity);
+            var next = Saves.Atomically(() =>
+            {
+                var saved = CharacterSaves.Load(CharacterName(conn));
+                return CharacterSaves.ChangeMainAscendancy(CharacterName(conn), latest =>
+                {
+                    var candidate = AscendancyRules.Select(baseClass, latest, chosen.Identity);
+                    ValidateOrdinaryPassives(conn, saved?.Passives ?? [], candidate);
+                    return candidate;
+                });
+            });
+            conn.MainAscendancy = next;
+            AscendancyPolicies.SelectionChanged(conn);
+            conn.SavedPassiveProgress = new(next, conn.Passives, conn.MasteryEffects, conn.RefundPoints);
+        }
+    }
+
+    // Earns the Labyrinth tiers' ascendancy points (two each, once: AscendancyRules.AwardKeys), saved, and sends the tree.
+    internal static async Task<int> AwardAscendancyPoints(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+        IEnumerable<string> awards)
+    {
+        byte baseClass = (byte)Skills.ClassFor(conn.ClassRow).IntegerId;
+        AscendancyProgress next;
+        lock (conn.Monsters)
+        {
+            using var availability = AscendancyPolicies.Enter(conn, conn.MainAscendancy.Selection);
+            next = CharacterSaves.ChangeMainAscendancy(CharacterName(conn), latest =>
+            {
+                AscendancyPolicies.RequireCurrentSelection(conn.MainAscendancy.Selection, latest.Selection);
+                foreach (string award in awards) latest = AscendancyRules.Award(baseClass, latest, award);
+                return latest;
+            });
+            conn.MainAscendancy = next;
+            AscendancyPolicies.SelectionChanged(conn);
+            conn.SavedPassiveProgress = new(next, conn.Passives, conn.MasteryEffects, conn.RefundPoints);
+        }
+        await SendPassives(remote, stream, ciphers, conn);
+        return next.EarnedPoints;
+    }
+
+    // C→S 0x39: the Ascendancy Chamber's class selector (opened by its font, InstanceWaypoints.AscendancySelectUi) chose an
+    // Ascendancy.dat row. Only in a Labyrinth's last room, for an unascended character; the area reloads with the new class.
+    internal static async Task ChooseAscendancyClass(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, byte row)
+    {
+        byte baseClass = (byte)Skills.ClassFor(conn.ClassRow).IntegerId;
+        var chosen = Ascendancies.Choices(baseClass).FirstOrDefault(d => d.Identity.Family == AscendancyFamily.Normal && d.TableRow == row);
+        Console.WriteLine($"[gateway] {remote} <= 0x0039 ascendancy row {row} chosen: {chosen?.Name ?? "not one of this class's"}");
+        if (chosen is null || !LabyrinthDay.IsChamber(conn.Layout.Id) || conn.MainAscendancy.Selection is not null) return;
+        try { SelectMainAscendancy(conn, chosen); }
+        catch (Exception ex) when (ex is AscendancyRuleException or PassiveProgressConflictException)
+        {
+            Console.WriteLine($"[gateway] {remote} {chosen.Name} refused: {ex.Message}");
+            return;
+        }
+        await ChangeArea(remote, stream, ciphers, conn, new PendingTransfer(conn.Layout.Hash, 0, false), $"ascendancy {chosen.Name} chosen at the font");
     }
 
     // The character's passive skill tree (0x33): its level (from which the client counts the points), its class (the
@@ -1461,12 +1529,12 @@ static partial class Game
         {
             if (goldRespec)
             {
-                await Send(remote, stream, ciphers, InstanceEntities.Gold(gold), $"0x02a9 gold: {gold} (respec, {cost} paid)");
+                await Send(remote, stream, ciphers, InstanceEntities.Gold(gold), $"0x02aa gold: {gold} (respec, {cost} paid)");
             }
             await SendCharacterStats(remote, stream, ciphers, conn, "passives");
             await Send(remote, stream, ciphers, [], "0x01c1/0x01c2 passive buffs (passives)", atGate: () => PassiveBuffAuras.Presentation(conn));
             // A refund can lower the maximum life: the current life needs its own 0x1b1 (0x1b3 only carries the maximum).
-            await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(PlayerId, conn.PlayerLife),
+            await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(PlayerId, conn.PlayerLife, conn.PlayerReservedLife),
                 $"0x01b1 player life {conn.PlayerLife} (passives)");
             await SendPlayerMana(remote, stream, ciphers, conn, $"0x01b1 player mana {conn.PlayerMana} (passives)");
         }
@@ -1475,7 +1543,7 @@ static partial class Game
         return error;
     }
 
-    // Experience from a kill: added (up to the last level), sent as the Player component's experience (0x2ba; the client
+    // Experience from a kill: added (up to the last level), sent as the Player component's experience (0x2bc; the client
     // derives the level and plays the level up from it), saved, and at a new level the level's stats, life and passive
     // points from current experience and the account's level (Auth set_level, for the character list).
     internal static async Task GainExperience(string remote, NetworkStream stream, ConnectionCiphers ciphers,
