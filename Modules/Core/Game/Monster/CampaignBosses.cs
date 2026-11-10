@@ -121,7 +121,38 @@ static class CampaignBosses
         6426,                          // maligaro_vanish
         9402, 6203,                    // vilenta's hide and her change_to_stance2
         9083, 9085, 7901, 7903, 7904,  // her geometry and empty_action rows
+        6328, 6329, 6322,              // Innocence's own raise_statues and summon_templars rows
     ];
+
+    // The summon rows whose monster the data names: what the boss raises and how many at a time. The rows'
+    // stat sets carry no hit, so they stay markers as well — the clip plays and the monsters arrive with it.
+    // Rows the data leaves unnamed (Dominus' lightning souls, Malachai's hearts and his flayed ones, Maligaro's
+    // blades) stay plain markers. Every variety here is one the blob can serialize (data/object-types.json: the
+    // base Monster list plus the extras the write knows) — a summon the catalog cannot create is a skill that
+    // silently does nothing, so a row whose real monster carries a component the write cannot serialize
+    // (AvariusCasticusStatue's TriggerableBlockage, DaressoStatueMaleSword, SkeletonMeleeLightningShavronne) raises
+    // a kindred supported variety instead.
+    internal const string AvariusStatue = "Metadata/Monsters/BloodElemental/BloodElemental";   // a Guardian of Eternity
+    internal const string KaomArcher = "Metadata/Monsters/Daemon/KaomVolcanoMortar";           // his skull-and-arrow daemon
+    internal const string BloodElemental = "Metadata/Monsters/BloodElemental/BloodElemental";
+    internal const string PietyEye = "Metadata/Monsters/SummonedSkull/SummonedArcaneEye";      // an eye of the abomination
+    internal const string ShavronneSkeleton = "Metadata/Monsters/Skeletons/SkeletonCasterLightning";
+    internal const string DaressoStatue = "Metadata/Monsters/BloodElemental/BloodElemental";   // the arena statue stands in
+
+    internal static readonly Dictionary<int, (string Variety, int Count)> Spawns = new()
+    {
+        [6326] = (AvariusStatue, 2), [6327] = (AvariusStatue, 2), [6328] = (AvariusStatue, 2),
+        [6329] = (AvariusStatue, 2),                       // avarius_raise_statues (all four rows)
+        [5142] = (KaomArcher, 3),                          // trigger_kaom_archer_spawners
+        [2507] = (BloodElemental, 2),                      // piety_summon_blood_elementals
+        [5243] = (PietyEye, 1), [5244] = (PietyEye, 1),    // piety_activate_eye_spawner
+        [6674] = (ShavronneSkeleton, 2),                   // summon_specific_monsters_on_self
+        [6675] = (ShavronneSkeleton, 2),                   // summon_specific_monsters_on_target
+        [4614] = (DaressoStatue, 2),                       // daresso_summon_clones (the arena's statues fight)
+    };
+
+    // How many monsters one boss may have alive at once; a summon row that would go past it raises nothing.
+    const int AddCap = 6;
 
     // Attacks that hit harder than their stat set names (the slams and the big swings): a scale on the variety's
     // physical damage, the way the Brine King's slam reads its own (BrineKing.cs Attack: Scale(2)).
@@ -287,6 +318,7 @@ static class CampaignBosses
     internal const string Malachai2 = "Metadata/Monsters/Malachai/MalachaiBoss2";        // his second stage
     internal const string Avarius = "Metadata/Monsters/AvariusCasticus/AvariusCasticus";  // a5q?, Chamber of Innocence
     internal const string AvariusReassembled = "Metadata/Monsters/AvariusCasticus/AvariusCasticusWickerman"; // a10q?
+    internal const string AvariusDivine = "Metadata/Monsters/AvariusCasticus/AvariusCasticusDivine"; // Innocence, a5
     internal const string Kitava = "Metadata/Monsters/KitavaBoss/Kitava1";               // a5q?, Cathedral Rooftop
     internal const string KitavaFinal = "Metadata/Monsters/KitavaBoss/KitavaFinal";      // a10q?, The Control Blocks
     internal const string ShavronneTower = "Metadata/Monsters/Shavronne/ShavronneTower"; // a6q2, Shavronne's Tower
@@ -324,6 +356,9 @@ static class CampaignBosses
     internal static readonly int[] AvariusEffects = [406, 6284, 6314, 6318, 6291, 6566, 6326, 6320];
     // Reassembled (the wickerman form): no slam of his own left, only the projectiles, the cleave and the statues.
     internal static readonly int[] AvariusReassembledEffects = [406, 6316, 6288, 6285, 6327];
+    // Innocence (his second form in the same fight): the cleave, the super projectile, the delayed blast, the divine
+    // beam, the charge and the firestorm; he raises the same statues.
+    internal static readonly int[] AvariusDivineEffects = [406, 6287, 6293, 2728, 6563, 6568, 1466, 6326];
     // Kitava's first fight: the swipe, the slam, and the debris he throws out of the arena.
     internal static readonly int[] KitavaEffects = [6590, 6598, 6603, 6636];
     // Kitava, the final fight: the swipe, the X blast and nuke, a beam sweep, the death breath and the orbs.
@@ -351,7 +386,7 @@ static class CampaignBosses
     internal static bool IsAct(MonsterCatalog.Variety? v) => v?.Id is Brutus or Merveil or MerveilTwisted or Weaver
         or Piety or Dominus or DominusAscendant or Kaom or Daresso or PietyBeast or Malachai or Malachai2
         or Avarius or AvariusReassembled or Kitava or KitavaFinal or ShavronneTower or BruteTower or Maligaro
-        or GeneralAdus or Vilenta;
+        or GeneralAdus or Vilenta or AvariusDivine;
 
     internal static bool IsBoss(MonsterCatalog.Variety? v) => v?.Id is not BrineKingId && (IsAct(v) || IsTukohama(v)
         || IsAbberath(v) || IsRyslatha(v) || IsGreust(v) || IsGruthkul(v) || IsArakaali(v) || IsYugul(v)
@@ -373,6 +408,7 @@ static class CampaignBosses
         Malachai2 => Malachai2Effects,
         Avarius => AvariusEffects,
         AvariusReassembled => AvariusReassembledEffects,
+        AvariusDivine => AvariusDivineEffects,
         Kitava => KitavaEffects,
         KitavaFinal => KitavaFinalEffects,
         ShavronneTower => ShavronneEffects,
@@ -639,6 +675,12 @@ static class CampaignBosses
             var variety = boss.Variety!;
             var attack = Attack(conn, effect);
             var pos = boss.Walk.Position(now);
+            // A summon row raises the boss's own monsters, owned by it (RetireAll takes them with it). They arrive
+            // with the clip rather than at once, the way Garukhan's warriors rise out of her cascade.
+            if (Spawns.TryGetValue(effect, out var add) && AliveAdds(conn) < AddCap)
+                for (int k = 0; k < add.Count; k++)
+                    pending.Add((now + Math.Max(0.8, attack.Seconds), add.Variety,
+                        pos.X + 3 - 3 * k, pos.Y + 2, false));
             if (ArtOf(effect) is { } art)
             {
                 var at = distance <= attack.Range + 4 ? player : pos;
