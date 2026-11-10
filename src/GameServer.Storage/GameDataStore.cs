@@ -120,6 +120,24 @@ public sealed class GameDataStore : IDisposable
         }
     }
 
+    /// <summary>Writes one system setting row (an upsert), the path the monitor's live tuning uses. The row is the
+    /// setting's value from then on: a key without a row reads 0, so a setting is restored by writing its default
+    /// back, not by removing its row.</summary>
+    public void SetSetting(string key, double value)
+    {
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("setting key is empty", nameof(key));
+        if (!double.IsFinite(value)) throw new ArgumentException("setting value is not finite", nameof(value));
+        lock (_gate)
+        {
+            using var command = Command("""
+                INSERT INTO system_settings (key, value)
+                VALUES ($key, $value)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """, ("$key", key), ("$value", value));
+            command.ExecuteNonQuery();
+        }
+    }
+
     public IReadOnlyList<CatalogRow> LoadCatalog(string kind)
     {
         lock (_gate)

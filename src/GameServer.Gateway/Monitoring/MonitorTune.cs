@@ -3,15 +3,16 @@ using System.Text.Json.Nodes;
 
 /// <summary>
 /// The monitor's world and loot tuning (the "调参" section): an admin reads the tunable system settings
-/// (<see cref="SystemSettings"/>) and writes new values, which take effect at once through the same path the
-/// <c>/game_data setting</c> command uses (<see cref="GameDataStore.SetSetting"/> + <see cref="GameData.Reload"/>) —
-/// no restart. The tunable keys are the world/loot ones: drop multipliers per kind, monster pack density and size,
-/// the rare/magic pack chances and the rare-pack floor, item quantity and experience.
+/// (<see cref="SystemSettings"/>) and writes new values, which take effect at once: the write is a row of
+/// world.db's <c>system_settings</c> table (<see cref="GameDataStore.SetSetting"/>) and
+/// <see cref="GameData.Reload"/> publishes it — no restart. The tunable keys are the world/loot ones: drop
+/// multipliers per kind, monster pack density and size, the rare/magic pack chances and the rare-pack floor, item
+/// quantity and experience.
 /// </summary>
 /// <remarks>
-/// GET /tune lists the keys with their current value and seed default; POST /tune writes one key after
+/// GET /tune lists the keys with their current value and their default; POST /tune writes one key after
 /// <see cref="SystemSettings.Validate"/> rejects anything out of range, and POST /tune/reset restores one key or all
-/// of them to their seeds. Every write carries the admin token (<see cref="MonitorGrant.Authorized"/>); reads stay
+/// of them to their defaults. Every write carries the admin token (<see cref="MonitorGrant.Authorized"/>); reads stay
 /// open like the other monitor reads.
 /// </remarks>
 static class MonitorTune
@@ -105,11 +106,12 @@ static class MonitorTune
         if (!SystemSettings.Validate(key, number, SystemSettings.Default.Values, out string? error))
             return Fail(error!, 400);
 
-        if (GameData.Store is null)
+        var store = GameData.Store;
+        if (store is null)
             return Fail("the game-data store is not open", 500);
         try
         {
-            Apply("monitor tune", $"INSERT OR REPLACE INTO system_settings (key, value) VALUES ('{key}', {number.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+            store.SetSetting(key, number);
             GameData.Reload("monitor tune");
             return (new JsonObject
             {
@@ -128,7 +130,8 @@ static class MonitorTune
     {
         if (!MonitorGrant.Authorized(body, out int status, out string refusal))
             return Fail(refusal, status);
-        if (GameData.Store is null)
+        var store = GameData.Store;
+        if (store is null)
             return Fail("the game-data store is not open", 500);
         // No key: every tunable one. With one: just that, refused when it is not tunable.
         List<string> targets = body.TryGetProperty("key", out var k) && k.ValueKind is JsonValueKind.String
@@ -136,41 +139,20 @@ static class MonitorTune
         try
         {
             var restored = new JsonArray();
-            var rows = new List<string>();
             foreach (string target in targets)
             {
                 if (!Keys.Contains(target))
                     return Fail($"\"{target}\" is not a tunable setting", 400);
-                // Back to the default the seeds carry.
-                rows.Add($"('{target}', {SystemSettings.Seeds.GetValueOrDefault(target).ToString(System.Globalization.CultureInfo.InvariantCulture)})");
+                // Back to the default the seeds carry: a row with no value reads 0, not the seed.
+                store.SetSetting(target, SystemSettings.Seeds.GetValueOrDefault(target));
                 restored.Add(target);
             }
-            Apply("monitor tune reset",
-                $"INSERT OR REPLACE INTO system_settings (key, value) VALUES\n{string.Join(",\n", rows)};");
             GameData.Reload("monitor tune reset");
             return (new JsonObject { ["ok"] = true, ["restored"] = restored }.ToJsonString(), JsonType, 200);
         }
         catch (Exception e) when (e is IOException or Microsoft.Data.Sqlite.SqliteException or ArgumentException)
         {
             return Fail($"the reset failed: {e.Message}", 500);
-        }
-    }
-
-    /// <summary>Applies one SQL statement to world.db the way the servers do: a pending update file, applied by the
-    /// updater, so the change is a row like any other and survives a restart.</summary>
-    static void Apply(string reason, string statement)
-    {
-        string folder = Path.Combine(GameServer.Storage.SqlUpdater.Root, "updates", "pending_world");
-        Directory.CreateDirectory(folder);
-        string path = Path.Combine(folder, $"monitor_tune_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.sql");
-        File.WriteAllText(path, $"-- The monitor's {reason}.\n{statement}\n", new System.Text.UTF8Encoding(false));
-        try
-        {
-            GameServer.Storage.SqlUpdater.Update(GameData.DefaultPath, "world", log: Console.Error.WriteLine);
-        }
-        finally
-        {
-            // The update is applied; the file stays pending so the change is in the repository's next commit.
         }
     }
 
