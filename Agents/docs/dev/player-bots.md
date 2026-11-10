@@ -62,5 +62,6 @@ Trading, chat and advanced tactical/ascendancy builds remain open. Current imple
 
 ## External party control
 
-The optional authenticated MCP endpoint exposes per-bot observations and leased tactical orders.
+The optional authenticated MCP endpoint exposes per-bot observations, leased tactical orders, a test-target spawn and
+the bot's damage ledger, so an external AI can run a mechanics experiment against a party bot.
 See [connection, tools and fallback rules](../../../Modules/PlayerBots/MCP.md).

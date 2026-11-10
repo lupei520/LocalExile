@@ -34,6 +34,14 @@ sealed partial class BotDirector
     static IControlledPlayerCommands CommandRules => Program.GameLogicOrNull as IControlledPlayerCommands
         ?? throw new InvalidOperationException("The current game module does not expose controlled-player commands.");
 
+    // The in-game lab boundary (src/GameServer.Gateway/Connection/CombatLab.cs): the game module implements it, and the
+    // transport implements none of it. Used for spawn_target, read_damage and the name form of command_bot.
+    static ICombatLabCommands CombatLab => Program.GameLogicOrNull as ICombatLabCommands
+        ?? throw new InvalidOperationException("The current game module does not expose the combat lab commands.");
+
+    // The party's distance rule, the same value the configuration resource reports (60 by default).
+    static int PartyRule => (int)((Program.GameLogicOrNull as IControlledPlayerCommands)?.MaximumLeaderDistance ?? 60);
+
     internal object McpConfiguration() => new
     {
         module = "PlayerBots", settings = _settings,
@@ -72,6 +80,8 @@ sealed partial class BotDirector
                         { botId = b.CharacterId, name = b.Name, peerId = b.PeerId, controller = b.Control?.Controller }).ToArray(),
                     observation = CommandRules.ObserveControlledPlayer(bot.Combat!, bot.Leader!) };
             }
+            // Reading the damage ledger changes nothing: no lease and no epoch, unlike the orders below.
+            if (tool == "read_damage") return ReadDamage(bot, args);
             if (tool == "claim_bot")
             {
                 if (!Ready(bot) || bot.Combat!.PlayerLife == 0) throw new InvalidOperationException("Only a ready living bot in a live human player's party can be claimed.");
@@ -100,16 +110,47 @@ sealed partial class BotDirector
             string epoch = BotMcpProtocol.Text(args, "epoch", 36);
             if (epoch != bot.ControlEpoch.ToString()) throw new InvalidOperationException("Stale area/session epoch. Observe the bot again before ordering.");
             long sequence = BotMcpProtocol.Integer(args, "sequence", 1, long.MaxValue);
+            if (tool == "spawn_target")
+            {
+                string monster = BotMcpProtocol.Text(args, "monster", 80);
+                string rarity = BotMcpProtocol.Text(args, "rarity", 16);
+                if (rarity is not ("normal" or "magic" or "rare" or "unique"))
+                    throw new ArgumentException("rarity must be normal, magic, rare or unique.");
+                int level = (int)BotMcpProtocol.Integer(args, "level", 1, 100);
+                int dx = (int)BotMcpProtocol.OptionalInteger(args, "dx", -1000, 1000);
+                int dy = (int)BotMcpProtocol.OptionalInteger(args, "dy", -1000, 1000);
+                double offset = Math.Sqrt((double)dx * dx + (double)dy * dy);
+                if (offset > PartyRule) throw new ArgumentException(
+                    $"dx/dy must be within the party's {PartyRule}-cell rule of the leader (this offset is {offset:0.#} cells).");
+                string? name = BotMcpProtocol.OptionalText(args, "name", 40);
+                bool friendly = BotMcpProtocol.OptionalFlag(args, "friendly");
+                string commandFingerprint = JsonSerializer.Serialize(new { epoch, tool, monster, level, rarity, name, dx, dy, friendly });
+                return lease.Accept(sequence, commandFingerprint, () =>
+                {
+                    string receipt = CombatLab.SpawnTarget(bot.Combat!, monster, level, rarity, name, dx, dy, friendly)
+                        .GetAwaiter().GetResult();
+                    var at = Spawned(receipt);
+                    return new { botId = bot.CharacterId, sequence, receipt, id = at?.Id, x = at?.X, y = at?.Y,
+                        level, rarity, dx, dy, friendly, distance = at is { } s ? DistanceTo(bot, s.X, s.Y) : (double?)null,
+                        detail = "Distance is the bot's own position to the spawned cell; the ordinary monster rules still decide its life and behaviour." };
+                });
+            }
             string action = BotMcpProtocol.Text(args, "action", 16);
+            // A caller may name a gem or an enemy instead of numbering it; an explicit id wins when both are given.
+            // The names resolve here, before the lease commits, so the fingerprint below is what the retry compares.
+            string? skillName = BotMcpProtocol.OptionalText(args, "skillName", 80);
+            string? targetName = BotMcpProtocol.OptionalText(args, "targetName", 80);
             ushort skill = (ushort)BotMcpProtocol.OptionalInteger(args, "skillId", 0, ushort.MaxValue);
+            if (skill == 0 && skillName is not null) skill = SkillByName(bot, skillName);
             uint target = (uint)BotMcpProtocol.OptionalInteger(args, "targetId", 0, uint.MaxValue);
+            if (target == 0 && targetName is not null) target = MonsterByName(bot, targetName);
             int x = (int)BotMcpProtocol.OptionalInteger(args, "x", 0, int.MaxValue);
             int y = (int)BotMcpProtocol.OptionalInteger(args, "y", 0, int.MaxValue);
             int flask = (int)BotMcpProtocol.OptionalInteger(args, "flaskSlot", 1, 5);
             double seconds = args.TryGetProperty("seconds", out var duration) ? duration.GetDouble() : 3;
             if (!double.IsFinite(seconds) || seconds is < .1 or > 5) throw new ArgumentException("seconds must be between 0.1 and 5.");
-            if (action is "attack" or "focus" or "pickup") _ = BotMcpProtocol.Integer(args, "targetId", 1, uint.MaxValue);
-            if (action is "attack" or "cast") _ = BotMcpProtocol.Integer(args, "skillId", 1, ushort.MaxValue);
+            if (action is "attack" or "focus" or "pickup") _ = TargetOrName(args, "targetId", "targetName");
+            if (action is "attack" or "cast") _ = SkillOrName(args, "skillId", "skillName");
             if (action == "move" || action == "cast" && target == 0)
             { _ = BotMcpProtocol.Integer(args, "x", 0, int.MaxValue); _ = BotMcpProtocol.Integer(args, "y", 0, int.MaxValue); }
             if (action == "cast" && target != 0 && target != bot.Combat!.PeerId && target != bot.Leader!.PeerId
@@ -132,6 +173,65 @@ sealed partial class BotDirector
             });
         }
     }
+
+    // Read one connection's damage ledger (CombatLab.DamageJson). Reading changes nothing, so this needs no lease,
+    // no epoch and no live following: only the character's ordinary connection.
+    static object ReadDamage(Bot bot, JsonElement args)
+    {
+        if (bot.Combat is not { Closed: false, LeavingArea: false } conn)
+            throw new InvalidOperationException("Bot is not ready: it has no live combat connection. Observe it after the transfer/death.");
+        int count = (int)BotMcpProtocol.OptionalInteger(args, "count", 1, 500);
+        if (count == 0) count = 50;
+        string? filter = BotMcpProtocol.OptionalText(args, "filter", 80);
+        bool clear = BotMcpProtocol.OptionalFlag(args, "clear");
+        string json = CombatLab.DamageJson(conn, count, filter);
+        int returned = DamageLines(json);
+        if (clear) CombatLab.ClearDamage(conn);
+        return new { botId = bot.CharacterId, count = returned, filter = filter ?? "", cleared = clear, damage = json,
+            detail = "One compact JSON object per line, oldest first; a record does not certify a kill or a death." };
+    }
+
+    // The lines DamageJson produced: its own count may be below the requested one when the ledger has fewer.
+    static int DamageLines(string json) => string.IsNullOrEmpty(json) ? 0
+        : json.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+
+    // The id, cell, level and rarity a SpawnTarget receipt reports ("answers where it stands and its id"). The current
+    // game module answers JSON; anything else leaves the parsed fields null and the caller reads the receipt itself.
+    static (uint Id, int X, int Y)? Spawned(string receipt)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(receipt);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var id)
+                || !root.TryGetProperty("x", out var px) || !root.TryGetProperty("y", out var py)
+                || !id.TryGetUInt32(out uint value) || !px.TryGetInt32(out int x) || !py.TryGetInt32(out int y)) return null;
+            return (value, x, y);
+        }
+        catch (JsonException) { return null; }
+    }
+
+    // How far the bot stands from a cell of its instance; null when its pose is not published right now.
+    static double? DistanceTo(Bot bot, int x, int y) => bot.Combat is { } conn && conn.Instance.Player(conn.PeerId) is { } pose
+        ? Math.Round((double)Math.Max(Math.Abs(pose.X - x), Math.Abs(pose.Y - y)), 1, MidpointRounding.AwayFromZero) : null;
+
+    // A required id-or-name pair: the id must be present, or the name must resolve, for the action to mean anything.
+    static int TargetOrName(JsonElement args, string id, string name) => args.TryGetProperty(id, out _)
+        ? (int)BotMcpProtocol.Integer(args, id, 1, uint.MaxValue) : NamedOrReject(args, name);
+
+    static int SkillOrName(JsonElement args, string id, string name) => args.TryGetProperty(id, out _)
+        ? (int)BotMcpProtocol.Integer(args, id, 1, ushort.MaxValue) : NamedOrReject(args, name);
+
+    static int NamedOrReject(JsonElement args, string name) => BotMcpProtocol.OptionalText(args, name, 80) is not null
+        ? 1 : throw new ArgumentException($"Invalid id or {name}");
+
+    // A gem of the bot's own character, by name or by part of one. Several matches and no match are both "nothing
+    // resolves": the caller observes the character for the candidates instead of guessing.
+    static ushort SkillByName(Bot bot, string name) => CombatLab.SkillIdByName(bot.Combat!, name)
+        ?? throw new InvalidOperationException($"No single gem of {bot.Name} matches \"{name}\". Observe the character for its skills.");
+
+    static uint MonsterByName(Bot bot, string name) => CombatLab.MonsterIdByName(bot.Combat!, name)
+        ?? throw new InvalidOperationException($"No single living monster near {bot.Name} matches \"{name}\". Observe the character for the nearby enemies.");
 
     static bool Ready(Bot b) => Program.GameLogicOrNull is IControlledPlayerCommands && b.Phase == BotPhase.Following && b.Leader is { Controlled: false, Closed: false, LeavingArea: false, PlayerSent: true }
         && b.Combat is { Closed: false, LeavingArea: false, ControlledPrepared: true, PlayerSent: true }

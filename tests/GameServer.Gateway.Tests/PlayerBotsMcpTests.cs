@@ -94,9 +94,11 @@ public sealed class PlayerBotsMcpTests
         var unsupported = Reply("""{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2099-01-01"}}}""");
         Assert.Equal(-32022, unsupported.GetProperty("error").GetProperty("code").GetInt32());
         var tools = Reply("""{"jsonrpc":"2.0","id":4,"method":"tools/list"}""").GetProperty("result").GetProperty("tools");
-        Assert.Equal(7, tools.GetArrayLength());
         var names = tools.EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToArray();
         Assert.Equal(names.Length, names.Distinct().Count());
+        // The advertised surface, by name: a new or renamed tool fails here with its own name, not as a count.
+        Assert.Equal(["claim_bot", "command_bot", "get_configuration", "list_bots", "observe_bot", "read_damage",
+            "release_bot", "renew_control", "spawn_target"], names.OrderBy(n => n, StringComparer.Ordinal));
         Assert.All(tools.EnumerateArray(), t => Assert.False(t.GetProperty("inputSchema").GetProperty("additionalProperties").GetBoolean()));
         var rules = Reply("""{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"playerbots://rules"}}""");
         Assert.Contains("server enforces recovery", rules.GetProperty("result").GetProperty("contents")[0].GetProperty("text").GetString());

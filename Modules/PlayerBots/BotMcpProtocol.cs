@@ -15,7 +15,11 @@ sealed class BotMcpProtocol(Func<string, JsonElement, object> call, Func<object>
         Prefer clear ground ahead of the leader's movement destination. Do not block entrances, orbit an idle leader,
         chase an enemy away from the party, or repeatedly interrupt your own cast. Fast fallback reactions stay server-side.
         Workflow: get_configuration; list_bots; observe_bot; claim_bot for each selected bot; observe again; command_bot.
-        Use only observed skill and enemy IDs. Include the current epoch and an increasing sequence for every order.
+        For a damage/mechanics test, spawn_target places one monster near the leader under the same lease, command_bot
+        orders the skill by skillName (or skillId/targetName), and read_damage reads the ledger afterwards; read_damage
+        needs no lease because reading changes nothing. Use only observed skills and enemies: a name must resolve to
+        exactly one gem or one living nearby monster. Include the current epoch and an increasing sequence for every
+        order; a retry uses the same sequence and identical payload, for spawn_target too, so one order spawns once.
         Retry a timed-out command with the same sequence and identical payload; observe lastCommand for the real outcome.
         Issued means the native request was processed, not that it hit or bypassed mana, requirements, cooldown or charges.
         Orders last at most five game seconds. Renew each lease before its wall-clock deadline and release when done.
@@ -34,7 +38,9 @@ sealed class BotMcpProtocol(Func<string, JsonElement, object> call, Func<object>
           {"name":"claim_bot","description":"Acquire exclusive control of one ready party bot. Save its private leaseId. An active lease cannot be stolen.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"controller":{"type":"string","minLength":1,"maxLength":80}},"required":["botId","controller"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}},
           {"name":"renew_control","description":"Renew your private lease before it expires. Uses wall time even if the game is paused.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"leaseId":{"type":"string","maxLength":96}},"required":["botId","leaseId"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}},
           {"name":"release_bot","description":"Release your lease and pending intent immediately; ordinary party AI resumes.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"leaseId":{"type":"string","maxLength":96}},"required":["botId","leaseId"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}},
-          {"name":"command_bot","description":"Queue one short decision, replacing an older pending decision. auto resumes AI; hold guards while following; move requires x/y; attack requires skillId/targetId and stays in place; cast uses skillId and x/y or a nearby party/enemy targetId; focus prioritizes targetId for ordinary AI; flask uses flaskSlot 1..5; pickup uses a nearby observed loot targetId without detouring. All normal gameplay checks and leader protection remain active. Observe outcome.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"leaseId":{"type":"string","maxLength":96},"epoch":{"type":"string","format":"uuid"},"sequence":{"type":"integer","minimum":1},"action":{"type":"string","enum":["auto","hold","move","attack","cast","focus","flask","pickup"]},"skillId":{"type":"integer","minimum":1,"maximum":65535},"targetId":{"type":"integer","minimum":1,"maximum":4294967295},"x":{"type":"integer","minimum":0},"y":{"type":"integer","minimum":0},"flaskSlot":{"type":"integer","minimum":1,"maximum":5},"seconds":{"type":"number","minimum":0.1,"maximum":5}},"required":["botId","leaseId","epoch","sequence","action"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}}
+          {"name":"command_bot","description":"Queue one short decision, replacing an older pending decision. auto resumes AI; hold guards while following; move requires x/y; attack requires skillId/targetId or skillName/targetName and stays in place; cast uses a skill and x/y or a nearby party/enemy target; focus prioritizes a target for ordinary AI; flask uses flaskSlot 1..5; pickup uses a nearby observed loot target. An explicit id wins over a name; names resolve through the loaded game module and a name that does not resolve to exactly one gem/enemy is rejected. All normal gameplay checks and leader protection remain active. Observe outcome.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"leaseId":{"type":"string","maxLength":96},"epoch":{"type":"string","format":"uuid"},"sequence":{"type":"integer","minimum":1},"action":{"type":"string","enum":["auto","hold","move","attack","cast","focus","flask","pickup"]},"skillId":{"type":"integer","minimum":1,"maximum":65535},"skillName":{"type":"string","maxLength":80},"targetId":{"type":"integer","minimum":1,"maximum":4294967295},"targetName":{"type":"string","maxLength":80},"x":{"type":"integer","minimum":0},"y":{"type":"integer","minimum":0},"flaskSlot":{"type":"integer","minimum":1,"maximum":5},"seconds":{"type":"number","minimum":0.1,"maximum":5}},"required":["botId","leaseId","epoch","sequence","action"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}},
+          {"name":"spawn_target","description":"Place one monster for a damage/mechanics test in the leased bot's instance, near the party leader, through the loaded game module. Requires the same live lease, epoch and increasing sequence as command_bot, so one sequence with an identical payload spawns one monster. dx/dy are leader-relative cells and must stay inside the party distance rule. Answers the spawned id, cell, level, rarity and the bot's distance to it.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"leaseId":{"type":"string","maxLength":96},"epoch":{"type":"string","format":"uuid"},"sequence":{"type":"integer","minimum":1},"monster":{"type":"string","minLength":1,"maxLength":80},"level":{"type":"integer","minimum":1,"maximum":100},"rarity":{"type":"string","enum":["normal","magic","rare","unique"]},"name":{"type":"string","maxLength":40},"dx":{"type":"integer","minimum":-1000,"maximum":1000},"dy":{"type":"integer","minimum":-1000,"maximum":1000},"friendly":{"type":"boolean"}},"required":["botId","leaseId","epoch","sequence","monster","level","rarity"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}},
+          {"name":"read_damage","description":"Read the bot connection's damage ledger: one compact JSON object per line, oldest first, with the count actually returned and the filter applied. count defaults to 50 and is capped at 500; filter keeps records whose skill or target contains it. clear empties the ledger after reading. Needs no lease, no epoch and no order: reading changes nothing. Observe the bot after a transfer or death.","inputSchema":{"type":"object","properties":{"botId":{"type":"string","format":"uuid"},"count":{"type":"integer","minimum":1,"maximum":500},"filter":{"type":"string","maxLength":80},"clear":{"type":"boolean"}},"required":["botId"],"additionalProperties":false},"annotations":{"readOnlyHint":true}}
         ]
         """).RootElement.Clone();
 
@@ -127,7 +133,8 @@ sealed class BotMcpProtocol(Func<string, JsonElement, object> call, Func<object>
             if (!properties.TryGetProperty(given.Name, out var definition)) throw new RpcFault(-32602, "Unknown argument: " + given.Name);
             string type = definition.GetProperty("type").GetString()!;
             bool valid = type switch { "string" => given.Value.ValueKind == JsonValueKind.String,
-                "integer" => given.Value.TryGetInt64(out _), "number" => given.Value.TryGetDouble(out _), _ => false };
+                "integer" => given.Value.TryGetInt64(out _), "number" => given.Value.TryGetDouble(out _),
+                "boolean" => given.Value.ValueKind is JsonValueKind.True or JsonValueKind.False, _ => false };
             if (!valid) throw new RpcFault(-32602, "Wrong argument type: " + given.Name);
             if (type == "string")
             {
@@ -139,7 +146,7 @@ sealed class BotMcpProtocol(Func<string, JsonElement, object> call, Func<object>
                 if (definition.TryGetProperty("enum", out var choices) && !choices.EnumerateArray().Any(c => c.GetString() == value))
                     throw new RpcFault(-32602, "Unknown action.");
             }
-            else
+            else if (type != "boolean")
             {
                 double value = given.Value.GetDouble();
                 if (!double.IsFinite(value) || definition.TryGetProperty("minimum", out var lo) && value < lo.GetDouble()
@@ -184,6 +191,17 @@ sealed class BotMcpProtocol(Func<string, JsonElement, object> call, Func<object>
     }
     internal static long OptionalInteger(JsonElement a, string key, long minimum, long maximum) =>
         a.TryGetProperty(key, out _) ? Integer(a, key, minimum, maximum) : 0;
+    internal static string? OptionalText(JsonElement a, string key, int maximum)
+    {
+        if (!a.TryGetProperty(key, out var given)) return null;
+        if (given.ValueKind != JsonValueKind.String || given.GetString() is not { } text || text.Length > maximum
+            || text.Any(char.IsControl)) throw new ArgumentException("Invalid " + key);
+        return text;
+    }
+    internal static bool OptionalFlag(JsonElement a, string key) => a.TryGetProperty(key, out var given)
+        ? given.ValueKind == JsonValueKind.True ? true
+            : given.ValueKind == JsonValueKind.False ? false : throw new ArgumentException("Invalid " + key)
+        : false;
     internal static object Error(object? id, int code, string message) => new { jsonrpc = "2.0", id, error = new { code, message } };
     static object VersionError(object? id, string? requested) => new { jsonrpc = "2.0", id, error = new { code = -32022,
         message = "Unsupported protocol version", data = new { supported = Versions, requested } } };
