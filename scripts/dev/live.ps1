@@ -262,8 +262,18 @@ function Start-SessionLauncher([string]$session, [string]$folder, [string]$recor
         if ($ended -or (Get-Date) -gt $deadline) {
             Stop-Wrapper $wrapper
             Remove-Item $record -ErrorAction SilentlyContinue
-            $why = (Get-Content $err -Raw -ErrorAction SilentlyContinue)
-            throw "the session client did not start ($(if ($ended) { 'its launcher ended' } else { "no client within $($script:LauncherTimeout) s" })): $why(logs\nullifier-$session.log, .err)"
+            # The launcher's own words. The .err is usually empty (the launcher exits before writing one) while the
+            # reason is the tail of the .log, so name only the files that hold something: the old message printed an
+            # empty $why and two file names, which hid "unable to find module" / "unable to find executable" behind a
+            # path that did not exist (2026-11-09).
+            $tail = @()
+            foreach ($path in @($log, $err)) {
+                if (-not (Test-Path $path)) { continue }
+                $lines = @(Get-Content $path -Tail 5 -ErrorAction SilentlyContinue | Where-Object { "$_".Trim() })
+                if ($lines.Count) { $tail += "$(Split-Path $path -Leaf): $($lines -join ' | ')" }
+            }
+            $why = if ($tail.Count) { $tail -join '; ' } else { 'the launcher wrote nothing to its log or error file' }
+            throw "the session client did not start ($(if ($ended) { 'its launcher ended' } else { "no client within $($script:LauncherTimeout) s" })): $why (logs\nullifier-$session.log, .err)"
         }
         Start-Sleep -Milliseconds 250
     }
@@ -417,6 +427,22 @@ function Start-Client([string]$session, $stack, [string]$seedConfig, [bool]$null
             if ($a.Length -ne $b.Length -or $a.LastWriteTimeUtc -ne $b.LastWriteTimeUtc) { Remove-Item $link -Force }
         }
         if (-not (Test-Path $link)) { New-Item -ItemType HardLink -Path $link -Target $shared | Out-Null }
+        # The client's own executable, so a session folder is self-consistent and nothing that launches the client
+        # from inside it finds the folder incomplete. A hard link, as Content.ggpk above: no second 79 MB, and a
+        # replaced (re-patched) client is re-linked rather than left stale. The nullifier launcher does not need it:
+        # nullifier.py spawns <repo>\Client\Game.patched.exe by its absolute path with this folder as the working
+        # directory, and no session folder ever held this file (none of data\clients\* did, 2026-11-09), so a missing
+        # link here is not by itself why a client fails to start.
+        $clientExe = Join-Path $client 'Game.patched.exe'
+        $folderExe = Join-Path $folder 'Game.patched.exe'
+        if (Test-Path $folderExe) {
+            $a = Get-Item $folderExe; $b = Get-Item $clientExe
+            if ($a.Length -ne $b.Length -or $a.LastWriteTimeUtc -ne $b.LastWriteTimeUtc) { Remove-Item $folderExe -Force }
+        }
+        if (-not (Test-Path $folderExe)) {
+            try { New-Item -ItemType HardLink -Path $folderExe -Target $clientExe | Out-Null }
+            catch { throw "session folder $folder could not be given Game.patched.exe from $clientExe : $($_.Exception.Message)" }
+        }
         foreach ($assets in Get-ChildItem $client -Directory | Where-Object { $_.Name -notin 'logs', 'CachedHLSLShaders' }) {
             $junction = Join-Path $folder $assets.Name
             if (-not (Test-Path $junction)) { New-Item -ItemType Junction -Path $junction -Target $assets.FullName | Out-Null }

@@ -129,6 +129,16 @@ the same block; a `stack.json` whose base cannot be read stops the search (give 
   its PID, start time and command line match the record). `-Nullifier` (`Game_CLIENT_NULLIFIER=1`) adds the engine's
   Null renderer (no GPU device or memory) and working-set trimming; without it the session's settings decide the
   renderer.
+  A session folder deliberately holds no `Game.patched.exe` (the list above): the launcher spawns
+  `<repo>\Client\Game.patched.exe` by absolute path and uses the folder only as the working directory, so a folder
+  missing the exe is not by itself a failed start — all six session folders of one checkout look alike, and five of
+  them have a `logs\nullifier-<session>.log` whose `run mutex ->` line proves a client started from them
+  (2026-11-09, half an hour spent on this). `Error: unable to find module 'Game.patched.exe'` in
+  `logs\nullifier-<session>.log` is benign noise: `nullifier.js` looks that module up in every process it is loaded
+  into, the `nvngx_update.exe` children included, and the same line appears in the logs of runs that started fine; a
+  genuine Frida failure reads `unable to find executable at 'X'`. When a session client does not come up, the launcher's
+  own files are the evidence and `live.ps1` now reports their last lines — or says outright that the launcher wrote
+  nothing, which means the wrapper never ran: a different investigation from a client that failed to launch.
 - **Logging in.** The bridge (`login:offline`, `login:saved`) connects to this stack's Auth by port. The client's own
   Log In button and a saved login use the login server in the GGPK's cached gateway list, which only the default stack
   writes (and only when it does not already name its Auth; reading the list works while clients run): the GGPK is

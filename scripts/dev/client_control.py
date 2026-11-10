@@ -37,6 +37,7 @@ from ctypes import wintypes
 import getpass
 import hashlib
 import json
+import locale
 import os
 from pathlib import Path
 import re
@@ -462,6 +463,23 @@ def log_mark(path=GATEWAY_LOG):
         return None
 
 
+def decode_log(data):
+    """The Gateway's redirected stdout is written in the console's encoding (the OEM code page on Windows), not UTF-8,
+    so a non-ASCII chat line -- a character name in the `/damage` path, for instance -- must not be read as UTF-8
+    (that returns U+FFFD and a path that does not exist). UTF-8 first (Linux, and a UTF-8 console), then the locale's
+    own encoding. `locale.getencoding()` rather than `getpreferredencoding()`: the latter follows UTF-8 mode, which a
+    caller may have turned on (PYTHONUTF8=1) for the pipes, and the log is not written in UTF-8 because of it."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    try:
+        fallback = locale.getencoding()
+    except AttributeError:                       # Python before 3.11
+        fallback = locale.getpreferredencoding(False)
+    return data.decode(fallback, errors="replace")
+
+
 def read_replies(path, start, ports=None):
     """The chat lines the Gateway sent after byte offset `start` of its log; with `ports`, only those sent to a
     connection from one of these local ports (one client's, when several share the Gateway; none when the client has
@@ -470,7 +488,7 @@ def read_replies(path, start, ports=None):
         log.seek(start)
         data = log.read()
     end = data.rfind(b"\n") + 1  # a line still being written is read next time
-    lines = data[:end].decode("utf-8", errors="replace").splitlines()
+    lines = decode_log(data[:end]).splitlines()
     return [m.group(2) for m in map(REPLY_LINE.search, lines)
             if m and (ports is None or (m.group(1) is not None and int(m.group(1)) in ports))], start + end
 

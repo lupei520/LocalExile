@@ -1,38 +1,75 @@
-// Local development RPC for the copied standalone 3.29.3c client. Loaded by client_control.py.
+// Local development RPC for the copied standalone 3.29.3b and 3.29.3c clients. Loaded by client_control.py.
 // Commands run inside the existing state-stack update, after its transition guard is entered.
 // No input simulation, screen coordinates, credential persistence, or executable patching.
 'use strict';
 const module = Process.getModuleByName('Game.patched.exe');
 const at = va => module.base.add(ptr(va).sub(ptr('0x140000000')));
-const specs = {
-  frame: ['0x141528fbf', '488b5d284883eb10483b5d200f848800'],
-  connect: ['0x142144340', '48895c2408488974241055574156488d'],
-  login: ['0x142145360', '48895c24084889742410555741544156'],
-  play: ['0x142147040', '48895c240848896c2410488974241857'],
-  write: ['0x140dfa000', '48895c240848896c2410488974241857'],
-  flush: ['0x140dfa160', '48895c24104889742418555741544156'],
-  logout: ['0x140d0f770', '48895c24104889742418555741554156'],
-  push: ['0x1415284c0', '48895c240848896c2410488974241857'],
-  dispatch: ['0x142145ae0', '48895c24084c89442418555657415441'],
-  loginWriter: ['0x142142fb0', '48895c241048896c2418488974242057'],
-  assignText: ['0x140134a00', '48895c241048896c2418565741574883'],
-  lifeTick: ['0x141e70730', '40534883ec3083b9a801000000488bd9'],
-  poolUpdate: ['0x141e70550', '405341574883ec288b42204c8bfa448b'],
+// The functions keep their bytes between the two builds; only their addresses and the app/stack singletons move.
+const signatures = {
+  frame: '488b5d284883eb10483b5d200f848800',
+  connect: '48895c2408488974241055574156488d',
+  login: '48895c24084889742410555741544156',
+  play: '48895c240848896c2410488974241857',
+  write: '48895c240848896c2410488974241857',
+  flush: '48895c24104889742418555741544156',
+  logout: '48895c24104889742418555741554156',
+  push: '48895c240848896c2410488974241857',
+  dispatch: '48895c24084c89442418555657415441',
+  loginWriter: '48895c241048896c2418488974242057',
+  assignText: '48895c241048896c2418565741574883',
+  lifeTick: '40534883ec3083b9a801000000488bd9',
+  poolUpdate: '405341574883ec288b42204c8bfa448b',
   // C->S 0x12 sender (login, name view, league view, unused r9, password view, start-state view); called by the
-  // create screen's 0x140cf5e60 after it pushes state 11. Needs only the login object and its socket +0xdd0.
-  createCharacter: ['0x142146de0', '48895c240848897c241044894c242055'],
-  // C->S 0x0c class 0x1435ca710 vtable slot 1 (message, socket): u16 id (+8), wstr (+0x10), u8 (+0x30); no flush.
-  deleteWriter: ['0x141f9baf0', '48895c2410574883ec20488bf9488bda'],
+  // create screen's sender after it pushes state 11. Needs only the login object and its socket +0xdd0.
+  createCharacter: '48895c240848897c241044894c242055',
+  // C->S 0x0c class writer (message, socket): u16 id (+8), wstr (+0x10), u8 (+0x30); no flush.
+  deleteWriter: '48895c2410574883ec20488bf9488bda',
   // The client's own instance send: guards the socket offsets lockedWrite copies from it (+0x240, +0x242, +0x248).
-  instanceSend: ['0x1421752b0', '48895c241048896c2418488974242057'],
+  instanceSend: '48895c241048896c2418488974242057',
 };
-const addresses = {};
-for (const [name, [va, expected]] of Object.entries(specs)) {
-  const p = at(va);
-  const actual = Array.from(new Uint8Array(p.readByteArray(expected.length / 2)))
-    .map(x => x.toString(16).padStart(2, '0')).join('');
-  if (actual !== expected) throw new Error(`Unsupported client: ${name} code differs from 3.29.3c`);
-  addresses[name] = p;
+const builds = [
+  {
+    name: '3.29.3b',
+    app: '0x1445cbe68', stack: '0x1445cbe40',
+    // C->S 0x0c message class (its vtable slot 1 is deleteWriter); the writer itself does not dereference it.
+    deleteClass: '0x1435bfcd8',
+    addresses: {
+      frame: '0x141526cbf', connect: '0x14213d9f0', login: '0x14213ea10', play: '0x1421406f0',
+      write: '0x140dfb760', flush: '0x140dfb8c0', logout: '0x140d0f740', push: '0x1415261c0',
+      dispatch: '0x14213f190', loginWriter: '0x14213c660', assignText: '0x1401346d0',
+      lifeTick: '0x141e6a190', poolUpdate: '0x141e69fb0', createCharacter: '0x142140490',
+      deleteWriter: '0x141f950c0', instanceSend: '0x14216e940',
+    },
+  },
+  {
+    name: '3.29.3c',
+    app: '0x1445d6fd8', stack: '0x1445d6fb0',
+    deleteClass: '0x1435ca710',
+    // The Logout button handler; it checks the login state and raises a handled "system error" after the transition,
+    // so the case below swallows that exception (the login screen is reached either way).
+    logoutButton: '0x140d146c0',
+    addresses: {
+      frame: '0x141528fbf', connect: '0x142144340', login: '0x142145360', play: '0x142147040',
+      write: '0x140dfa000', flush: '0x140dfa160', logout: '0x140d0f770', push: '0x1415284c0',
+      dispatch: '0x142145ae0', loginWriter: '0x142142fb0', assignText: '0x140134a00',
+      lifeTick: '0x141e70730', poolUpdate: '0x141e70550', createCharacter: '0x142146de0',
+      deleteWriter: '0x141f9baf0', instanceSend: '0x1421752b0',
+    },
+  },
+];
+function detectBuild() {
+  for (const build of builds) {
+    let matches = true;
+    for (const [name, expected] of Object.entries(signatures)) {
+      try {
+        const actual = Array.from(new Uint8Array(at(build.addresses[name]).readByteArray(expected.length / 2)))
+          .map(x => x.toString(16).padStart(2, '0')).join('');
+        if (actual !== expected) { matches = false; break; }
+      } catch (_) { matches = false; break; }
+    }
+    if (matches) return build;
+  }
+  throw new Error('Unsupported client: neither 3.29.3b nor 3.29.3c code matches');
 }
 const build = detectBuild();
 const addresses = {};
@@ -67,8 +104,8 @@ function lockedWrite(socket, writeIt) {
   if (threaded) acquireLock(lock);
   try { writeIt(); } finally { if (threaded) releaseLock(lock); socket.add(0x240).writeU8(0); }
 }
-const app = () => at('0x1445d6fd8').readPointer();
-const stack = () => at('0x1445d6fb0').readPointer();
+const app = () => at(build.app).readPointer();
+const stack = () => at(build.stack).readPointer();
 const loginObject = () => app().add(0x358).readPointer();
 const instance = () => app().add(0x348).readPointer();
 rpc.exports.identity = () => ({pid: Process.id, path: module.path, build: '3.29.3c'});
