@@ -319,8 +319,12 @@ static partial class Game
                 KingPhaseLocked = !friendly && KingInMists.IsBoss2(variety),
                 KingGrace = !friendly && KingInMists.IsBoss(variety),
                 FetishGrace = !friendly && KingInMists.IsFetish(variety),
-                // The Pantheon bosses too: their controllers rotate their kits (PantheonBosses.cs).
-                LifePhases = !friendly && (brine || atlas || pantheon) ? new([75, 50, 25])
+                // Atlas fights (and the Brine King) stop at 75/50/25 for an intermission. A Pantheon boss has no life
+                // gate: its "second phase" is a second variety in a second room (Abberath 6008→6012, Shakari
+                // 6275→6278, both placed by WorldAreas), so damage runs straight through — the empty gate never arms,
+                // and Step (which reads it) still has one to look at (PantheonBosses.cs).
+                LifePhases = !friendly && (brine || atlas) ? new([75, 50, 25])
+                    : !friendly && pantheon ? new([])
                     : !friendly && DepravedTrinity.IsBoss(variety) ? new([66, 33]) : null,
                 EntranceGrace = !friendly && (DepravedTrinity.IsBoss(variety) || VaalOversoul.IsBoss(variety) || DoedreSewers.IsBoss(variety)),
             }, emerge, waits);
