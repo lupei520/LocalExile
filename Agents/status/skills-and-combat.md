@@ -1682,6 +1682,18 @@ This is a research baseline, not new live skill acceptance or complete native/se
   its conditional path now also receives aggregate area (0xd7) and radius percentage (0x1591).
   Cyclone's additional melee-range and stage modifiers remain partial.
   See protocol/11-skills.md.
+- **Cyclone hit circle (2026-11-09).** A channelled skill's sweep always lands on the player now, the skill's own use
+  included: it was centred on the aimed point whenever the aim sat within the skill's reach, while the client draws the
+  spin around the caster, so the circle left the drawn spin in both directions (monsters outside it took hits,
+  monsters under it were missed). The later sweeps already used the player's cell.
+  Live in The Coast: a use aimed 20 cells away hits within 16 cells of the player's cell and kills the two monsters
+  5.9 cells away that an aim-centred circle of the same radius left out (it was 18.9 cells from the aim).
+  The channelled use itself also runs past the shared attack timer now, at both gates (the message gate and the
+  attack-timer check inside the cast): the client has already started its spin when the use arrives, and the channel's
+  payment and sweeps are refused while the swing timer is held, so a refused use left the client spinning over monsters
+  that took no damage (live 2026-11-09: two Cyclone uses refused while a Leap Slam's attack time ran, then 96 s
+  without a single sweep).
+  See protocol/11-skills.md (channelled skills).
 - **Self-targeted spells (2026-10-29).** Self-targeted spells (ActiveSkillTargetTypes 4 or 10: Ice Nova, Discharge,
   Shock Nova) hit around the caster wherever they are aimed, as the client draws them; before, an Ice Nova cast on a
   monster went off around the monster.

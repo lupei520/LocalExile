@@ -215,7 +215,18 @@ static partial class Game
                 // An attack gem swings with the weapon's attack time, while the client keeps aiming it for as long as the
                 // button is held. A use before the next attack is not a new action: it must not cancel the swing in progress
                 // (its pending hit), pay its cost or get a 0x1ab (live 2026-10-25).
-                if (attack && !AttackReady(conn, use.SkillId, gem.Effect, gem.Level, out double attackSeconds))
+                // A channelled skill is the exception: the client starts its spin on this very use and goes on drawing it on
+                // its own, so a use refused here left it spinning over monsters that took no damage (live 2026-11-09: two
+                // Cyclone uses refused while a Leap Slam's attack time ran, then 96 s without a single sweep). Its damage
+                // comes from the channel's own timer, so the use starts that channel whatever the attack timer says; a use
+                // that arrives while the channel is already running only keeps it, and pays nothing.
+                bool channelled = cast && gem.Name is not null && SkillsFor(conn).IsChannelled(gem.Effect);
+                if (channelled && ChannelLive(conn, use.SkillId))
+                {
+                    Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name}: keeps the channel it is running");
+                    continue;
+                }
+                if (attack && !channelled && !AttackReady(conn, use.SkillId, gem.Effect, gem.Level, out double attackSeconds))
                 {
                     Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name}: ignored, the previous attack is still running (attack time {attackSeconds:0.00} s) (t={conn.Clock.Elapsed.TotalSeconds:0.000})");
                     NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,

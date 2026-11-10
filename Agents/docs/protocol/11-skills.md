@@ -1680,6 +1680,14 @@ The initial timer starts only after payment succeeds; 0x199 invalidates the gene
 Queued sweeps check it again after mana publication and inside each hit commit, so releasing and restarting the same
 skill cannot revive old damage.
 The sweep centre is sampled from the current walk after queued sends, rather than its earlier timer position.
+The skill's own use lands its first sweep on the player too, never on the aimed point: the client draws Cyclone's
+spin around the caster while the aim may sit anywhere within the skill's reach, so a sweep centred on the aim
+landed off the drawn spin (live 2026-11-09: a use aimed 20 cells away put the hit circle 5.9 cells from the
+player and 18.9 from the aim, so the two monsters under the spin were outside it).
+A channelled use is not paced by the shared attack timer, and neither is its start: the client has already begun
+its spin when the use arrives, and the channel's payment and sweeps are refused while the swing timer is held, so
+refusing the use left the client spinning over monsters that took no damage (live 2026-11-09: two Cyclone uses
+refused while a Leap Slam's attack time ran, then 96 s without a single sweep; both gates skip channelled skills).
 Pause still rejects contacts, and each timer revalidates that its gem remains available before charging the next sweep.
 A freeze or a stun's hit recovery (`PlayerActionBlocked`) suspends the timer: no stage is paid or swept until it ends.
 A stage already paid when one lands is refused at its hit commit.

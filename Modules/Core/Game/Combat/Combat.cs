@@ -813,9 +813,12 @@ static partial class Game
         // An attack gem swings with the weapon's attack time, like the default attack (see Attack): while the button is held
         // the client keeps aiming it, and every use used to pay its cost and start a swing (live 2026-10-25: Holy Strike on
         // the right mouse button, twelve swings a second at 6 mana each). The timer is shared with the default attack, so
-        // two attacks cannot start at once either.
+        // two attacks cannot start at once either. A channelled skill is the exception (its damage runs on the channel's
+        // own timer, and the client has already started its spin when the use arrives; the channel's payment and sweeps
+        // are refused while the swing's timer is held, so the use itself must not be: live 2026-11-09).
         // Paid Vaal admission already reserved this swing atomically with its cost, before the native echo.
-        if (vaalUse is null && gem.Name is not null && SkillsFor(conn).IsAttack(gem.Effect))
+        if (vaalUse is null && gem.Name is not null && SkillsFor(conn).IsAttack(gem.Effect)
+            && !SkillsFor(conn).IsChannelled(gem.Effect))
         {
             double duration = SupportedAttackSeconds(conn, skillId);
             double now = swingAt ?? conn.Clock.Elapsed.TotalSeconds, next;
@@ -1327,6 +1330,16 @@ static partial class Game
                 && conn.Clock.Elapsed.TotalSeconds - conn.LastChannelUpdateAt <= ChannelSilenceSeconds;
     }
 
+    // Whether a channel this connection started is still running. RunChannel stops on another action (which overwrites
+    // ChannelSkill), a lost gem or an unpaid sweep, while the client goes on drawing the spin: a use that arrives later
+    // has to tell a live channel from a dead one, so it does not pay for a second channel or skip its own.
+    internal static bool ChannelLive(ClientState conn, ushort skill)
+    {
+        lock (conn.Monsters)
+            return conn.ChannelSkill == skill && !conn.Closed && !conn.LeavingArea && conn.PlayerLife > 0
+                && conn.Clock.Elapsed.TotalSeconds - conn.LastChannelUpdateAt <= ChannelSilenceSeconds;
+    }
+
     internal static bool PaidChannelCurrent(ClientState conn, ChannelPaymentReceipt receipt)
     {
         lock (conn.Monsters)
@@ -1423,9 +1436,15 @@ static partial class Game
         double waveLength = wave ? GroundSlamWave.Length(radius) : 0;
         double waveHalfAngle = wave ? GroundSlamWave.HalfAngle(Stat) : 0;
         (double X, double Y) waveDir = wave ? GroundSlamWave.Direction(from, to) : (0, 0);
+        // A channelled skill's own sweep (Cyclone) is the spin the client draws around the player, never around the
+        // cursor: while the button is held the aim is only where the mouse sits, up to the skill's reach away, so a
+        // sweep centred on it landed where nothing was drawn (monsters beyond the spin took hits, monsters under it were
+        // missed; live 2026-11-09). The later sweeps already resolve on the player's own cell (RunChannel).
+        bool channelledSweep = !spell && SkillsFor(conn).IsChannelled(gem.Effect);
         // A wave starts where the player stands and only takes its direction from the aim; a melee skill aimed far away
         // still lands in front of the player; a self-targeted spell goes off around the caster.
-        var centre = wave || VaalExecutor(conn, gem.Effect) || !spell && Dist(from, to) > radius + weapon.Range ? from
+        var centre = wave || channelledSweep || VaalExecutor(conn, gem.Effect)
+                || !spell && Dist(from, to) > radius + weapon.Range ? from
             : spell ? SpellCentre(conn, gem.Effect, from, to) : to;
         int action = actionToken ?? cooldownUse?.ActionToken ?? conn.ActionCount;
         // A later action (a Move, another use) replaces the swing; nothing of it lands from then on. The ordinary attack
@@ -1485,8 +1504,10 @@ static partial class Game
             // A freeze or stun that landed after this stage was paid interrupts it before the sweep.
             if (channelGeneration is not null
                 && PlayerActionBlocked(conn, conn.Clock.Elapsed.TotalSeconds, conn.Clock.Elapsed.TotalSeconds)) return;
-            // Queued mana output may outlast movement: resolve a channel at its current position.
-            if (channelGeneration is not null) centre = conn.Walk.Position(now);
+            // Queued mana output may outlast movement: resolve a channel at its current position. A channelled skill's
+            // own sweep (Cyclone's spin, which keeps turning while the player walks) is resolved the same way, so it
+            // lands on the player's cell at the sweep rather than the one the action was aimed from or started at.
+            if (channelGeneration is not null || channelledSweep) centre = conn.Walk.Position(now);
             var found = conn.Monsters.Select(e => (e.Key, e.Value, At: e.Value.Walk.Position(now)))
                 .Select(e => (e.Key, e.Value, e.At, Distance: Dist(e.At, centre)))
                 .Where(e => e.Key != excludeMonster && e.Value.Hostile && !e.Value.Dead && e.Value.Life > 0 && e.Value.OwnerId is null
