@@ -15,8 +15,11 @@ public sealed class GameModule : IModule
         Rules.CombatLifetime = module.Lifetime;
         Program.SetGameLogic(new GameLogic(module.Lifetime));
         module.OnTick((player, _) => global::BrineKing.Tick(Program.ConnOf(player)));
+        // The Shaper and the Elder: one scripted step per connection per tick, their own fight state per monster.
+        module.OnTick((player, _) => global::AtlasBosses.Tick(Program.ConnOf(player)));
         module.Lifetime.Own(GameEvents.PlayerStatSources.Add("BrineKing", global::BrineKing.PlayerStats));
         module.Lifetime.Own(global::BrineKing.CleanupOnUnload());
+        module.Lifetime.Own(global::AtlasBosses.CleanupOnUnload());
         module.Lifetime.Own(GameEvents.Kill.Add("Game", Rules.ReservationKill));
         module.OnPlayerLeaving((player, _) => global::BrineKing.Leaving(Program.ConnOf(player)));
     }
