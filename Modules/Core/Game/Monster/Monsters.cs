@@ -160,11 +160,11 @@ static partial class Game
         // SirusFight.cs): their record's swing is their basic skill, and every other skill of their kit is played by their
         // controller through its own id.
         bool atlas = AtlasBosses.IsBoss(variety);
-        // The Pantheon's campaign bosses (PantheonBosses.cs): their record's swing is their basic skill, the kit's
+        // The campaign's scripted bosses (CampaignBosses.cs): their record's swing is their basic skill, the kit's
         // other skills are played by their controller through its own ids.
-        bool pantheon = PantheonBosses.IsBoss(variety);
+        bool pantheon = CampaignBosses.IsBoss(variety);
         int effect = brine ? BrineKing.MeleeEffect : atlas ? AtlasBosses.BasicEffect(variety)
-            : pantheon ? PantheonBosses.BasicEffect(variety)
+            : pantheon ? CampaignBosses.BasicEffect(variety)
             : !kingActor ? MavenNucleus.CombatEffect(catalog, variety)
             : variety.GrantedEffects is [int firstEffect, ..] ? firstEffect : -1;
         bool rangedAttack = kingActor
@@ -223,7 +223,7 @@ static partial class Game
         var kingSkills = DepravedTrinity.SkillsFor(conn, variety, level) ?? VaalOversoul.SkillsFor(conn, variety, level)
             ?? DoedreSewers.SkillsFor(conn, variety, level) ?? BrineKing.SkillsFor(conn, variety, level, attack)
             ?? KingInMists.SkillsFor(conn, variety, level, attack) ?? AtlasBosses.SkillsFor(conn, variety, level, attack)
-            ?? PantheonBosses.SkillsFor(conn, variety, level, attack)
+            ?? CampaignBosses.SkillsFor(conn, variety, level, attack)
             ?? (KingInMists.IsFetish(variety) ? KingInMists.FetishSkillsFor(conn, variety, level, attack) : null);
         var skills = kingSkills is { Count: > 0 } ? kingSkills
             : skill is null ? null : stageSkill is null ? [skill] : [skill, stageSkill];
@@ -319,10 +319,11 @@ static partial class Game
                 KingPhaseLocked = !friendly && KingInMists.IsBoss2(variety),
                 KingGrace = !friendly && KingInMists.IsBoss(variety),
                 FetishGrace = !friendly && KingInMists.IsFetish(variety),
-                // Atlas fights (and the Brine King) stop at 75/50/25 for an intermission. A Pantheon boss has no life
+                // Atlas fights (and the Brine King) stop at 75/50/25 for an intermission. A campaign boss has no life
                 // gate: its "second phase" is a second variety in a second room (Abberath 6008→6012, Shakari
-                // 6275→6278, both placed by WorldAreas), so damage runs straight through — the empty gate never arms,
-                // and Step (which reads it) still has one to look at (PantheonBosses.cs).
+                // 6275→6278, both placed by WorldAreas) or one the quest engine creates (Merveil, Dominus, Malachai),
+                // so damage runs straight through — the empty gate never arms, and Step (which reads it) still has
+                // one to look at (CampaignBosses.cs).
                 LifePhases = !friendly && (brine || atlas) ? new([75, 50, 25])
                     : !friendly && pantheon ? new([])
                     : !friendly && DepravedTrinity.IsBoss(variety) ? new([66, 33]) : null,
@@ -585,7 +586,7 @@ static partial class Game
                 if (DepravedTrinity.IsBoss(m.Variety) || VaalOversoul.IsBoss(m.Variety) || DoedreSewers.IsBoss(m.Variety)
                     || BrineKing.IsBoss(m.Variety) || KingInMists.IsBoss(m.Variety) || KingInMists.IsFetish(m.Variety)
                     || KingInMists.IsGuidingLight(m.Variety) || AtlasBosses.IsBoss(m.Variety)
-                    || PantheonBosses.IsBoss(m.Variety)) continue;
+                    || CampaignBosses.IsBoss(m.Variety)) continue;
                 if (m.Hostile && protectedEntry) continue;
                 var (mx, my) = m.Walk.Position(now);
                 double d = Math.Sqrt((double)(mx - px) * (mx - px) + (double)(my - py) * (my - py));

@@ -22,9 +22,9 @@ public sealed class GameModule : IModule
         module.OnTick((player, _) => global::BrineKing.Tick(Program.ConnOf(player)));
         // The Shaper and the Elder: one scripted step per connection per tick, their own fight state per monster.
         module.OnTick((player, _) => global::AtlasBosses.Tick(Program.ConnOf(player)));
-        // The Pantheon bosses: one scripted step per connection per tick, their own fight per monster (PantheonBosses.cs).
-        module.OnTick((player, _) => global::PantheonBosses.Tick(Program.ConnOf(player)));
-        module.Lifetime.Own(global::PantheonBosses.CleanupOnUnload());
+        // The Pantheon bosses: one scripted step per connection per tick, their own fight per monster (CampaignBosses.cs).
+        module.OnTick((player, _) => global::CampaignBosses.Tick(Program.ConnOf(player)));
+        module.Lifetime.Own(global::CampaignBosses.CleanupOnUnload());
         module.OnTick((player, _) => global::VaalOversoul.Tick(Program.ConnOf(player)));
         module.OnTick((player, _) => global::DepravedTrinity.Tick(Program.ConnOf(player)));
         module.Lifetime.Own(global::DepravedTrinity.CleanupOnUnload());
