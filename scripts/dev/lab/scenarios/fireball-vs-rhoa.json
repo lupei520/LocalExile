@@ -1,0 +1,22 @@
+{
+  "name": "fireball-vs-rhoa",
+  "description": "Fireball against one spawned Rhoa at a fixed level: spawn, cast, collect the damage ledger, check the hit and the clamp. The smallest useful damage experiment.",
+  "session": "lab",
+  "steps": [
+    {"verb": "command", "text": "/god immune"},
+    {"verb": "spawn", "monster": "Rhoa", "level": 4, "rarity": "normal", "note": "the id and the full label (<variety Name>@<level>) come back from /mobs"},
+    {"verb": "settle", "seconds": 1.0, "note": "let the monster's emerge finish before it can be hit"},
+    {"verb": "cast", "skill": "Fireball", "target": "Rhoa", "note": "by label; the Gateway resolves it to the spawned id"},
+    {"verb": "settle", "seconds": 1.0, "note": "the projectile has to travel and land"},
+    {"verb": "collect", "filter": "Fireball", "note": "read the jsonl /damage names"},
+    {
+      "verb": "expect",
+      "hits": 1,
+      "kind": "outgoing",
+      "skill": "Fireball",
+      "target": "Rhoa Mare@4",
+      "taken_le_raw": true,
+      "note": "the label is <variety Name>@<level>, not the name given to /spawn_mob: variety Rhoa is 'Rhoa Mare'. /cast matched 'Rhoa' by substring; the ledger records the full label."
+    }
+  ]
+}

@@ -84,17 +84,25 @@ static partial class Game
                     await Task.Delay(TimeSpan.FromSeconds(left + .001));
                     readAt = 0;
                 }
+                bool actionBlocked;
                 lock (conn.Monsters)
                 {
-                    if (PlayerActionBlocked(conn, conn.ClockAt(readAt), conn.Clock.Elapsed.TotalSeconds))
+                    actionBlocked = PlayerActionBlocked(conn, conn.ClockAt(readAt), conn.Clock.Elapsed.TotalSeconds);
+                    if (actionBlocked)
                     {
                         // The client starts the newest click when it can again: the server walks it then (ReleaseHeldMove).
                         if (id != InstanceProtocol.ChannelUpdateId)
                             conn.HeldMove = id == InstanceProtocol.UseSkillAtLocationId && InstanceProtocol.ReadUseSkillAtLocation(bytes) is var held
                                 && SkillsFor(conn).ActionName(held.SkillId) == "Move" ? held : null;
-                        continue;
                     }
-                    conn.HeldMove = null;
+                    else conn.HeldMove = null;
+                }
+                if (actionBlocked)
+                {
+                    // Dropped, not queued: record it, or a caller reads "accepted" and "0 records" with no way to tell why.
+                    NoteDroppedMessage(conn, id, bytes,
+                        "the use was dropped, not queued: the character was in hit recovery or had no action speed");
+                    continue;
                 }
             }
             if (id == InstanceProtocol.UseSkillAtLocationId) Mark("hold");
@@ -113,14 +121,18 @@ static partial class Game
                     continue;
                 }
                 // A gem skill cast at the ground (Fireball) stops the player where it stands; anything else (Move) walks there.
-                if (InTown(conn) && SkillsFor(conn).ActionName(use.SkillId) != "Move") continue;
+                if (InTown(conn) && SkillsFor(conn).ActionName(use.SkillId) != "Move")
+                {
+                    NoteDroppedMessage(conn, InstanceProtocol.UseSkillAtLocationId, bytes, "the use was refused in town");
+                    continue;
+                }
                 if (SkillsFor(conn).ActionName(use.SkillId) != "Move")
                     await EndGracePeriod(remote, stream, ciphers, conn, action: true);
                 Mark("grace");
                 bool cast = SkillsFor(conn).IsGemSkill(use.SkillId);
                 var gem = cast ? GemSkillEffects(conn).FirstOrDefault(g => g.Id == use.SkillId) : default;
                 Mark("gem");
-                if (cast && gem.Name is not null && !ProjectilePathAvailable(remote, conn, use.SkillId, gem.Effect)) continue;
+                if (cast && gem.Name is not null && !ProjectilePathAvailable(remote, conn, use.SkillId, gem.Effect, aim: (use.X, use.Y))) continue;
                 Mark("path");
                 // A disabled gem's skill is not confirmed: the client animates the cast and sends the use anyway (it only reds
                 // the gem), so without the 0x1ab the action does not run. No projectile, mana or cooldown either.
@@ -170,7 +182,12 @@ static partial class Game
                         if (!TryBeginSkillCooldownUse(conn, use.SkillId, gem.Effect,
                             CooldownFor(conn, gem.Effect, gem.Level, gem.Quality), false,
                             () => { at = Math.Max(at, ProjectileWorldTime(conn)); walkAction = Interlocked.Increment(ref conn.ActionCount); conn.Walk.Order(use.X, use.Y, at); conn.ChannelSkill = 0; },
-                            out var approachTicket, reserve: false, requestedAt: at)) continue;
+                            out var approachTicket, reserve: false, requestedAt: at))
+                        {
+                            NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                                "the attack-move could not start: a cooldown, mana or a later action refused it", 0, (use.X, use.Y));
+                            continue;
+                        }
                         await Send(remote, stream, ciphers,
                             InstanceProtocol.ActionStarted(PlayerId, here.X, here.Y, use.X, use.Y, use.SkillId, use.Slot, use.Flags),
                             $"0x01ab {gem.Name}: attack-move to ({use.X}, {use.Y}) from ({here.X}, {here.Y}) (t={at:0.000})",
@@ -184,6 +201,12 @@ static partial class Game
                             conn.LastManaResyncAt = conn.Clock.Elapsed.TotalSeconds;
                             await SendPlayerMana(remote, stream, ciphers, conn,
                                 $"0x01b1 player mana {conn.PlayerMana} (attack-move, cost back)");
+                            // The use became a walk, so no hit happened. Rate-limited with the mana resync above (the
+                            // client repeats this packet every frame while the button is held) so a held attack-move
+                            // cannot flood the ledger.
+                            NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                                "the use became an attack-move: the point is beyond the weapon's reach, so the character walks",
+                                0, (use.X, use.Y));
                         }
                         continue;
                     }
@@ -195,6 +218,8 @@ static partial class Game
                 if (attack && !AttackReady(conn, use.SkillId, gem.Effect, gem.Level, out double attackSeconds))
                 {
                     Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name}: ignored, the previous attack is still running (attack time {attackSeconds:0.00} s) (t={conn.Clock.Elapsed.TotalSeconds:0.000})");
+                    NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                        "the previous attack was still running, so this use was ignored", 0, (use.X, use.Y));
                     continue;
                 }
                 Mark("ready");

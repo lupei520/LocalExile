@@ -58,6 +58,7 @@ faulted one attack later), and the server only sees the disconnect, so these are
 | `latency` | a `[latency]` summary every interval instead of only slow ones ([07](../protocol/07-latency-visibility-movement.md)); `Game_LATENCY_METRICS=1` still works |
 | `ticks` | every 50th 0x1b tick with its bytes |
 | `ai` | every monster chase order (0x1ab); a monster giving up is always logged |
+| `damage` | `[damage] {json}` for every committed hit, from the combat lab's ledger ([combat lab](combat-lab.md)): the same records `/damage` writes |
 | `packets` | every message in both directions but the clock messages, in full hex (`[packets] …`, besides the usual 96-byte line): large logs, for short sessions |
 
 Set it in the PowerShell session before `live.ps1`, for example `$env:Game_TRACE = 'move,packets'`.

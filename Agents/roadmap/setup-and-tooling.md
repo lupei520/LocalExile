@@ -6,6 +6,12 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
 
 ## 5. Project
 
+- Combat lab follow-ups ([combat lab](../docs/dev/combat-lab.md), in the status of this area):
+  `/cast` is untested on a lockstep client (there the synthesized use waits for the client's own acknowledgement, so it
+  may never be confirmed); a monster placed for a test is matched by object id or variety label, because the custom
+  name `/spawn_mob` takes is shown only in the client; and the PlayerBots MCP endpoint cannot start while the Gateway
+  runs under `dotnet watch` (`HttpListener.Start()` throws `ERROR_INVALID_HANDLE` in that process, so it needs
+  `live.ps1 -NoHotReload` today).
 - Define native graph integration separately from the [read-only analysis exporter](../docs/dev/passive-graph-data.md).
   Standard startup must preserve the installed 3.29.3c client archive.
   Any client archive mutation requires separate maintainer agreement; automatic graph installation is not approved.

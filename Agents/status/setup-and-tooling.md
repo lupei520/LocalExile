@@ -8,6 +8,21 @@ Part of [Status](../Status.md); what to build next in this area is in
 - The 3.29.3c client: login, characters, town, inventory and stash, cosmetics, kills, items, flasks and skills,
   waypoints and transitions, NPCs and shops, the hideout, chat and relog (live run, 2026-11-08).
   Port tools: `scripts/re/port`, `PortMap.java`; docs: [tooling](../docs/re/tooling.md) §11.
+- The in-game combat lab, for damage and mechanics work: an agent drives a real character through the ordinary skill
+  pipeline (`/cast <gem id|name> [<monster id|label> | <x> <y>]`, `/skills`) and every committed hit lands in a
+  per-connection ledger that `/damage [count] [filter]` writes to `logs/damage-<character>.jsonl` — skill and gem id,
+  the hit's resolved damage (`raw`), the life it actually took (`taken`, `raw > taken` only on an overkill), the
+  rolled per-type composition, critical, outcome, life before and after, and the distance.
+  `Game_TRACE=damage` also writes each record to the Gateway log.
+  `scripts/dev/lab/lab.py` runs a scenario (goto, spawn, cast, settle, collect, expect) against a session client and
+  writes `logs/lab-<time>.json`, exiting 0/1/2. Live 2026-11-09 on a level-100 character: `/skills` listed its two
+  gems, `/cast Cyclone` at a spawned `Rhoa Mare@80` landed two hits through the ordinary pipeline (3348 and 3526 taken,
+  life 8950 → 5602 → 2076), `/damage Cyclone` answered `damage 2 record(s) → logs/damage-<character>.jsonl`, and the
+  scenario run finished 7 steps, 4 records, 1/1 expectation, exit 0 (`logs/lab-20261109-211632.json`).
+  A character that is dead casts nothing: `/cast` still answers its receipt while every use is dropped, so read
+  `/state` (`life`, `dead`) before believing a zero-record run ([combat lab](../docs/dev/combat-lab.md)).
+  Code: `DamageLedger.cs`, `CombatLab.cs` and `Rules.CombatLab.cs` (Game/Commands), `CombatLab.cs` (the framework
+  interface), `scripts/dev/lab/lab.py`; docs: [combat lab](../docs/dev/combat-lab.md).
 - Game data extracted from the GGPK in one step: `scripts/dev/extract-data.ps1` (run by `live.ps1` on every start,
   `-NoExtract` to skip) regenerates each data file that is missing or whose manifest version changed (stamps in
   `data/extract-stamps.json`), and the Gateway warns once at startup about any missing file.

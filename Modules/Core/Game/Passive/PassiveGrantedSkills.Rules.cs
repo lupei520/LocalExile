@@ -263,7 +263,10 @@ static partial class Game
                     gambler.InvertsResistance(Random.Shared));
                 if (critical) damage = DamageModel.CriticalDamage(damage, CriticalMultiplierOn(m, multiplier));
                 var stun = OwnerStun(conn, m, damage, mitigated, melee: false, spell: true, critical, player, own);
+                var lifeBefore = m.Life;
                 var applied = ApplyMonsterHitLocked(conn, m, damage);
+                if (applied is not null)
+                    NoteOutgoing(conn, skill.EffectId, 0, id, m, rolled, damage, critical, lifeBefore, hitAt);
                 if (applied is { StageStarts: true } staged)
                 {
                     CommitBossStage(remote, stream, ciphers, conn, id, m, ProjectileWorldTime(conn));

@@ -50,14 +50,17 @@ static partial class Game
 
     // Validate adopted paths before accepting an action, spending mana or reserving a cooldown.
     // Release still resolves again: equipment/stats may change during the ordinary cancellable windup.
-    internal static bool ProjectilePathAvailable(string remote, ClientState conn, ushort skillId, int effect)
+    internal static bool ProjectilePathAvailable(string remote, ClientState conn, ushort skillId, int effect,
+        uint targetId = 0, (int X, int Y) aim = default)
     {
         if (!UsesProjectileRuntime(effect)) return true;
+        // The gem is resolved before the try so the refusal record can name it (a support-granted skill has none).
+        var gem = GemSkillEffects(conn).FirstOrDefault(g => g.Id == skillId);
+        string? gemName = gem.Name;
         try
         {
             var definition = ResolveProjectileDefinition(effect)
                 ?? throw new InvalidOperationException("no available projectile recipe/metadata");
-            var gem = GemSkillEffects(conn).FirstOrDefault(g => g.Id == skillId);
             if (gem.Name is null || !SkillHitPlan.ForSkill(SkillsFor(conn), effect, gem.Level, gem.Quality).CanHit)
                 throw new InvalidOperationException("no supported projectile damage plan");
             var resolved = MergeSkillStats(CharacterPlayerStats(conn), SupportedSkill(conn, skillId).Stats);
@@ -71,6 +74,9 @@ static partial class Game
         catch (InvalidOperationException ex)
         {
             Console.WriteLine($"[gateway] {remote} {SkillsFor(conn).EffectId(effect)} unavailable: {ex.Message}");
+            // The same refusal, as the ledger's own evidence: the console line above answers "why not" and this row
+            // answers "did the use ever happen", so /damage no longer reads 0 records for a skill that never fired.
+            NoteRefusal(conn, skillId, effect, gemName, ex.Message, targetId, aim);
             return false;
         }
     }
@@ -101,11 +107,30 @@ static partial class Game
         // Paid attacks survive Move unless their recipe opts into cancellable windup (e.g. release-time costs).
         // Spells and cooldown tickets retain action cancellation.
         // Epoch, death and hit recovery still cancel unreleased attacks.
-        bool Valid() => conn.ProjectileActive(epoch) && conn.ActionInterruptionGeneration == recoveryGeneration
-            && (ticket?.Current(conn) ?? (cancelOnNewAction
-            ? PlayerActionCurrent(conn, action)
-            : conn.PlayerLife > 0 && conn.ElementalAilments.ActionFactor(conn.Clock.Elapsed.TotalSeconds) > 0 && !conn.HitRecovery.Active(conn.Clock.Elapsed.TotalSeconds)))
-            && GemSkillInstanceDisabled(conn, gem.Effect, skillId) is null;
+        // Why this release did not happen, or null when it did: an unreleased use was cancelled in total silence, so a
+        // /cast that paid its cost and echoed its action could leave no record anywhere (live 2026-11-09: a use
+        // evaporated while the two monsters it aimed past were hitting the character).
+        string? ReleaseDrop()
+        {
+            if (!conn.ProjectileActive(epoch)) return "the use was dropped before its release: the projectile generation changed";
+            if (conn.ActionInterruptionGeneration != recoveryGeneration) return "the use was dropped before its release: the character was interrupted";
+            if (ticket is not null) return ticket.Current(conn) ? null : "the use was dropped before its release: its cooldown ticket expired";
+            if (cancelOnNewAction) return PlayerActionCurrent(conn, action) ? null : "a later action cancelled the use before its release";
+            if (conn.PlayerLife == 0) return "the character died before the use was released";
+            if (conn.ElementalAilments.ActionFactor(conn.Clock.Elapsed.TotalSeconds) <= 0) return "the character was frozen, so the use was dropped before its release";
+            if (conn.HitRecovery.Active(conn.Clock.Elapsed.TotalSeconds)) return "the character was in hit recovery when the use was released";
+            if (GemSkillInstanceDisabled(conn, gem.Effect, skillId) is not null) return "the skill was disabled before the use was released";
+            return null;
+        }
+        // The label is resolved once, here: the schedule's lambda runs on the projectile pump, where resolving a gem
+        // is not wanted.
+        string releaseLabel = SkillsFor(conn).EffectId(gem.Effect) ?? gem.Name ?? $"0x{skillId:x4}";
+        bool Valid()
+        {
+            if (ReleaseDrop() is not { } reason) return true;
+            NoteRefusal(conn, skillId, gem.Effect, gem.Name, reason, 0, aim, label: releaseLabel);
+            return false;
+        }
         // A spell's repeats (SpellRepeats) release again a cast time apart, with the use's critical roll; a new action
         // cancels the rest, as it ends the client's.
         // shortcut: a repeat keeps the cast's aim point; check live whether the client re-aims at a moving target.

@@ -1,0 +1,41 @@
+{
+  "name": "five-hits-bounds",
+  "description": "Five Fireballs at one spawned monster, then min/max/sum bounds on what it took: the repetition shape, and how a run reports a formula that drifts out of its expected band.",
+  "session": "lab",
+  "steps": [
+    {"verb": "command", "text": "/god immune"},
+    {"verb": "spawn", "monster": "Rhoa", "level": 10, "rarity": "rare", "note": "a rare at level 10 survives five hits; its label is 'Rhoa Mare@10' whatever rarity or custom name is given"},
+    {"verb": "settle", "seconds": 1.0},
+    {"verb": "damage", "clear": true, "note": "start the ledger from an empty one"},
+
+    {"verb": "cast", "skill": "Fireball", "target": "Rhoa"},
+    {"verb": "settle", "seconds": 1.0},
+    {"verb": "cast", "skill": "Fireball", "target": "Rhoa"},
+    {"verb": "settle", "seconds": 1.0},
+    {"verb": "cast", "skill": "Fireball", "target": "Rhoa"},
+    {"verb": "settle", "seconds": 1.0},
+    {"verb": "cast", "skill": "Fireball", "target": "Rhoa"},
+    {"verb": "settle", "seconds": 1.0},
+    {"verb": "cast", "skill": "Fireball", "target": "Rhoa"},
+    {"verb": "settle", "seconds": 1.5, "note": "the fifth hit lands after this"},
+
+    {"collect": {"filter": "Fireball"}},
+    {
+      "verb": "expect",
+      "hits": 5,
+      "kind": "outgoing",
+      "skill": "Fireball",
+      "target": "Rhoa Mare@10",
+      "taken_min": 1,
+      "taken_max": 100000,
+      "raw_min": 1,
+      "taken_le_raw": true,
+      "note": "five hits, each with a real roll; narrow raw_min/raw_max to the band the formula predicts (raw is the resolved damage; taken is clamped at the monster's remaining life)"
+    },
+    {
+      "verb": "expect",
+      "taken_sum": 1,
+      "note": "the total to compare with the formula; raise this to the expected sum before the run"
+    }
+  ]
+}

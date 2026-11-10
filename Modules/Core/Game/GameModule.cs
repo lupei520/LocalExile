@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using GameServer.Core.Protocol.Instance;
 using GameServer.Core.Protocol.Login;
 using GameServer.Modding;
 using Rules = global::Game;
@@ -21,7 +22,7 @@ public sealed class GameModule : IModule
     }
 }
 
-sealed class GameLogic(IModuleLifetime? lifetime = null) : IGameLogic, IControlledPlayerRules, IControlledPlayerCommands
+sealed partial class GameLogic(IModuleLifetime? lifetime = null) : IGameLogic, IControlledPlayerRules, IControlledPlayerCommands
 {
     internal IModuleLifetime? Lifetime { get; } = lifetime ?? Rules.CombatLifetime;
     public double MaximumLeaderDistance => Rules.ControlledFollowerLeash;
@@ -105,4 +106,61 @@ sealed class GameLogic(IModuleLifetime? lifetime = null) : IGameLogic, IControll
     public Task InitializeControlled(ClientState player, ClientState leader) => Rules.InitializeControlledPlayer(player, leader);
     public Task StepControlled(ClientState player, ClientState leader) => Rules.StepControlledPlayer(player, leader);
     public Task ControlledCompletion(ClientState player) => player.PlayerUpdatesState is PlayerUpdatesState updates ? updates.Completion : Task.CompletedTask;
+}
+
+// The in-game combat lab: the chat commands of the Commands module reach the ordinary skill path and the damage
+// ledger through this boundary (src/GameServer.Gateway/Connection/CombatLab.cs, Agents/docs/dev/combat-lab.md).
+sealed partial class GameLogic : ICombatLabCommands
+{
+    public ushort? SkillIdByName(ClientState player, string name) => Rules.SkillMatchByName(player, name).Id is var id and not 0 ? id : null;
+
+    public string Skills(ClientState player) => Rules.SkillsListing(player);
+
+    public uint? MonsterIdByName(ClientState player, string name) => Rules.MonsterMatchByName(player, name).Id is var id and not 0 ? id : null;
+
+    public async Task<string> UseSkill(ClientState player, string skill, string? target, int x, int y)
+    {
+        if (Rules.SkillMatchByName(player, skill) is not { Id: not 0 } gem)
+            return $"no gem of yours matches \"{skill}\"";
+        uint targetId = 0;
+        string aimed;
+        if (target is not null)
+        {
+            var monster = Rules.MonsterMatchByName(player, target);
+            if (monster.Id == 0)
+                return monster.Matches.Count == 0
+                    ? $"no living monster near you matches \"{target}\""
+                    : $"\"{target}\" matches {monster.Matches.Count} monsters: {string.Join(", ", monster.Matches)}";
+            targetId = monster.Id;
+            aimed = $"monster 0x{monster.Id:x} ({monster.Label})";
+        }
+        else if (x != 0 || y != 0) aimed = $"cell ({x}, {y})";
+        else
+        {
+            lock (player.Monsters) (x, y) = player.Walk.Position(player.Clock.Elapsed.TotalSeconds);
+            targetId = PlayerId;   // no target: the character's own cell, the ObjectId form the client uses on itself
+            aimed = "yourself";
+        }
+        await Rules.UseSkillThroughPipeline(player, gem.Id, targetId, x, y);
+        return $"cast {gem.Name} (0x{gem.Id:x4}) at {aimed} - the ordinary pipeline may still refuse it, read /damage or /state for the outcome";
+    }
+
+    public async Task<string> SpawnTarget(ClientState player, string monster, int level, string rarity, string? name, int dx, int dy, bool friendly)
+    {
+        if (Rules.Monsters.Error is { } error) return error;
+        if (Rules.Monsters.Find(monster) is not { } variety) return $"no monster matches \"{monster}\"";
+        if (!variety.Supported) return $"{variety} is not supported yet";
+        if (!Enum.TryParse(rarity, ignoreCase: true, out GameServer.Core.Protocol.Instance.MonsterRarity parsed))
+            parsed = GameServer.Core.Protocol.Instance.MonsterRarity.Normal;
+        return await Rules.SpawnLabMonster(player, variety, level, parsed, name, dx, dy, friendly);
+    }
+
+    public string DamageJson(ClientState player, int count, string? filter) => Rules.DamageLog(player, count, filter);
+
+    public void ClearDamage(ClientState player) => DamageLedger.Clear(player);
+
+    // The lab's own socket operation, for a module (PlayerBots) that wants to choose the skill under test; the chat
+    // command /socket_gem reaches the same Rules.SocketGemForLab through the Commands module's static call.
+    public Task<string> SocketGem(ClientState player, string gem, string? item, int? socket) =>
+        Rules.SocketGemForLab(player.Wire.Remote, player.Wire.Stream, player.Wire.Ciphers, player, gem, item, socket);
 }

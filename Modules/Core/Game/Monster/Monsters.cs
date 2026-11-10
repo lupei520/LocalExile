@@ -1615,6 +1615,7 @@ static partial class Game
         // A retired producer is refused before recording an accepted hit or touching any current resource state.
         if (!CurrentGameWork) return null;
         int priorContacts = conn.RecentEnemyHits.Count(now);
+        uint playerLifeBefore = conn.PlayerLife;
         using var defenceTime = FortificationOf(conn).Capture(now);
         // Resolve lazy final defences here, never at AI collection or before a queued echo/pause wait.
         var stats = CharacterPlayerStats(conn);
@@ -1788,6 +1789,7 @@ static partial class Game
         // its own stun roll; the player's recovery is the authoritative 0x1d1 (SendPlayerHitRecovery).
         var packet = InstanceProtocol.ActionHit(id, sequence, PlayerId, flags: MonsterHitFlags(blocked, monsterCritical), kind: 0x03,
             code: HitCode(mitigated), angle: HitAngle(here.X - from.X, here.Y - from.Y));
+        NoteIncoming(conn, m, a, rawDamage, damage, blocked, monsterCritical, playerLifeBefore, now);
         return new(packet, life, conn.PlayerMana, manaBefore, damage, rawDamage, blocked, monsterCritical, recovery, armour, spirit);
     }
 

@@ -320,9 +320,12 @@ static partial class Game
                 var (stored, _) = target.Impale.OnHit(physical, at, settings, random, target.Effects["avoid_impale_%"]);
                 damage = ImpaleStats.AddReflected(damage, MonsterImpaleDamage(target, stored));
             }
+            var lifeBefore = target.Life;
             var hit = ApplyMonsterHitLocked(Conn, target, damage, player: player,
                 cull: Cull.Of(player, shot.SkillStats, critical, shot.Spell));
             if (hit is null) return ProjectileHitResult.Miss;
+            NoteOutgoing(Conn, shot.Label, shot.SourceSkill, contact.Target.Id, target, rolled, damage, critical,
+                lifeBefore, at);
             // Item Quantity Support: the kill's loot rolls read the supported skill's share.
             if (Stats.Key("base_killed_monster_dropped_item_quantity_+%") is uint quantityKey)
                 target.KilledWithItemQuantityPct = shot.SkillStats.GetValueOrDefault(quantityKey);

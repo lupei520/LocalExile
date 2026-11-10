@@ -1,0 +1,42 @@
+{
+  "name": "two-targets-split",
+  "description": "Two monsters of one variety side by side, cast at one of them by reference: the shape every multi-target test needs (split, splash, chain, area, pierce). A label cannot name one of two identical monsters, so each spawn is referenced instead.",
+  "session": "lab",
+  "steps": [
+    {"verb": "command", "text": "/god immune"},
+    {
+      "verb": "spawn",
+      "monster": "Rhoa",
+      "level": 20,
+      "rarity": "normal",
+      "ref": "primary",
+      "note": "a second one of the same variety would make '/cast ... Rhoa' ambiguous"
+    },
+    {"verb": "settle", "seconds": 1.0},
+    {
+      "verb": "spawn",
+      "monster": "Rhoa",
+      "level": 20,
+      "rarity": "normal",
+      "ref": "secondary"
+    },
+    {"verb": "settle", "seconds": 1.0},
+    {"verb": "damage", "clear": true, "note": "measure only this cast"},
+    {
+      "verb": "cast",
+      "skill": "Splitting Steel",
+      "target": "$primary",
+      "note": "resolves to the id the first spawn learned, so the Gateway cannot pick the wrong monster"
+    },
+    {"verb": "settle", "seconds": 2.0, "note": "the hit has to land"},
+    {"collect": {"count": 50}},
+    {
+      "verb": "expect",
+      "hits": 1,
+      "kind": "outgoing",
+      "targetId": "$primary",
+      "taken_le_raw": true,
+      "note": "the id says which monster was hit; the label cannot, because both share it"
+    }
+  ]
+}

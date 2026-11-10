@@ -219,6 +219,13 @@ static class CommandsFeature
             var (x, y) = conn.SpawnNear(conn.Walk.Position(conn.Clock.Elapsed.TotalSeconds));
             await SpawnMonster(remote, stream, ciphers, conn, variety, level, rarity, x, y, name, friendly);
         }, "monster")
+        .Add("cast", CastUsage, args => CastSkill(conn, args), "gem", "monster")
+        .Add("skills", "/skills [filter] (dev: your own castable gems, one per line: id, name, level, quality, whether it needs a target and whether it can be used now)", args => SkillsCommand(conn, args))
+        .Add("totems", "/totems [filter] (dev: your living totems, one per line: id, variety, level, life/max life, cell, seconds left and the skill each carries; they are not monsters, so /mobs and /state's monsters array never show them)", args => TotemsCommand(conn, args))
+        .Add("socket_gem", "/socket_gem <gem id|name> [<equipped item id|name>] [<socket index>] (dev: socket one of your inventory gems through the ordinary socket operation, so a test can choose which skill is under test)", args => SocketGemCommand(conn, args, remote, stream, ciphers), "gem", "item")
+        .Add("smite", SmiteUsage, args => SmiteCommand(conn, args, remote, stream, ciphers), "monster")
+        .Add("mob_life", MobLifeUsage, args => MobLifeCommand(conn, args, remote, stream, ciphers), "monster")
+        .Add("damage", "/damage [count] [filter] | clear (dev: write the last damage records to logs/damage-<character>.jsonl, one compact JSON object per line, and answer a one-line summary)", args => DamageCommand(conn, args))
         .Add("statue", "/statue <MonsterVarieties row, Id or name> [variation] (dev: place that monster's stone statue at the player)", async args =>
         {
             if (args.Length == 0)

@@ -259,7 +259,12 @@ static partial class Game
     internal static async Task Attack(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, SpawnedMonster m, double requestedAt)
     {
-        if (m.OwnerId is not null) return;
+        if (m.OwnerId is not null)
+        {
+            NoteRefusal(conn, use.SkillId, -1, null,
+                "the target belongs to a player or a minion, so it is not attackable", use.TargetId);
+            return;
+        }
         int projectileEpoch;
         lock (conn.Monsters) projectileEpoch = conn.ProjectileEpoch;
         var weapon = WeaponFor(conn);
@@ -459,8 +464,10 @@ static partial class Game
                 if (!fortified) fortified = FortificationOnHitLocked(conn, m, RawFortificationDamage(ownRolled, critical, criticalMultiplier),
                     WeaponProfileFor(conn, activeSet: true).Melee, player, ownPenetration);
                 var rampageSource = RampageOnMeleeHitLocked(conn, m, WeaponProfileFor(conn, activeSet: true).Melee, player);
+                uint lifeBefore = m.Life;
                 (m.Life, stageStarts) = TakeOwnerHitLocked(conn, m, damage, Cull.Of(player, ownPenetration, critical, spell: false),
                     rampageSource, player);
+                NoteOutgoing(conn, "player-melee", 0, targetId, m, ownRolled, damage, critical, lifeBefore, at);
                 if (stageStarts)
                 {
                     CommitBossStage(remote, stream, ciphers, conn, targetId, m, ProjectileWorldTime(conn));
@@ -527,9 +534,15 @@ static partial class Game
     internal static async Task CastOn(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, SpawnedMonster m, double requestedAt)
     {
-        if (m.OwnerId is not null) return;
+        if (m.OwnerId is not null)
+        {
+            NoteRefusal(conn, use.SkillId, -1, null,
+                "the target belongs to a player or a minion, so it is not attackable", use.TargetId);
+            return;
+        }
         var gem = GemSkillEffects(conn).FirstOrDefault(g => g.Id == use.SkillId);
-        if (gem.Name is not null && !ProjectilePathAvailable(remote, conn, use.SkillId, gem.Effect)) return;
+        if (gem.Name is not null && !ProjectilePathAvailable(remote, conn, use.SkillId, gem.Effect, use.TargetId,
+            m.Walk.Position(conn.Clock.Elapsed.TotalSeconds))) return;
         // A movement attack (Flicker Strike, Leap Slam) closes the distance itself, and an attack used with "always attack
         // without moving" (Flags bit 0) swings from where the player stands: both keep the immediate cast.
         if (gem.Name is not null && SkillsFor(conn).IsAttack(gem.Effect) && !SkillsFor(conn).IsMovement(gem.Effect) && (use.Flags & 0x1) == 0)
@@ -556,7 +569,13 @@ static partial class Game
                     // A lockstep client's walk-up is placed where its 0x1ab goes out (LockstepAttackStart).
                     if (conn.LockstepClient) (here, stop, arrive, atOnce) = (conn.Walk.Position(now), conn.Walk.Position(now), now, false);
                     else (here, stop, arrive, atOnce) = WalkUpToSwing(conn, m, target, weapon, now, precision);
-                }, out var approachTicket, reserve: false, requestedAt: requestedAt)) return;
+                }, out var approachTicket, reserve: false, requestedAt: requestedAt))
+            {
+                NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                    "the attack could not start: a cooldown, mana or a later action refused it", use.TargetId,
+                    m.Walk.Position(ProjectileWorldTime(conn)));
+                return;
+            }
             if (!conn.LockstepClient)
                 Console.WriteLine($"[gateway] {remote} <= 0x0024 skill 0x{use.SkillId:x4} {gem.Name} on 0x{use.TargetId:x}: player ({here.X}, {here.Y}), " +
                     $"monster ({target.X}, {target.Y}), distance {Dist(here, target):0.0}; swing from ({stop.X}, {stop.Y}) in {arrive - now:0.00} s (t={now:0.000})");
@@ -572,6 +591,9 @@ static partial class Game
                 Walked, stop, arrive, atOnce, now, precision, lockstep) is not { } swing)
             {
                 Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name} on 0x{use.TargetId:x} cancelled before the swing");
+                NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                    "the use was cancelled before the swing: a later action or a lost target took it", use.TargetId,
+                    m.Walk.Position(ProjectileWorldTime(conn)));
                 LockstepAttackOver(conn, action);
                 return;
             }
@@ -582,6 +604,8 @@ static partial class Game
             if (!SwingInReach(conn, m, stop, target, weapon.Range + 2))
             {
                 Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name} on 0x{use.TargetId:x} out of reach: {Dist(stop, target):0.0} > {weapon.Range}");
+                NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                    "the target is out of the skill's reach, so no swing happened", use.TargetId, target);
                 LockstepAttackOver(conn, action);
                 return;
             }
@@ -589,6 +613,9 @@ static partial class Game
                 CooldownFor(conn, gem.Effect, gem.Level, gem.Quality), false,
                 () => { }, out var cooldownUse, actionToken: action))
             {
+                NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                    "the swing was refused: a cooldown, mana or a later action took the use while it walked up", use.TargetId,
+                    target);
                 LockstepAttackOver(conn, action);
                 return;
             }
@@ -617,6 +644,8 @@ static partial class Game
             {
                 Console.WriteLine($"[gateway] {remote} skill 0x{use.SkillId:x4} {gem.Name} on 0x{use.TargetId:x}: already dead, " +
                     $"no hit and no cost (t={conn.Clock.Elapsed.TotalSeconds:0.000})");
+                NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                    "the target was already dead when the use arrived, so nothing was hit", use.TargetId, target);
                 return;
             }
             if (!projectileRuntime) _ = CastGemSkill(remote, stream, ciphers, conn, use.SkillId, stop, target, use.TargetId, sequence: use.Sequence,
@@ -644,7 +673,13 @@ static partial class Game
                     var landing = MovementLanding(conn, gem.Effect, stand, aim);
                     conn.Walk.Teleport(landing.X, landing.Y, castAt);
                 }
-            }, out var spellUse, requestedAt: requestedAt)) return;
+            }, out var spellUse, requestedAt: requestedAt))
+        {
+            NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                "the cast could not start: a cooldown, mana or a later action refused it", use.TargetId,
+                m.Walk.Position(ProjectileWorldTime(conn)));
+            return;
+        }
         if (chargeToken != 0) _ = RunShieldCharge(remote, stream, ciphers, conn, chargeToken, conn.Walk.ArrivesAt,
             use.SkillId, use.Sequence, spellUse?.ActionToken ?? castAction, spellUse);
         bool spellAcknowledged = false;
@@ -657,7 +692,12 @@ static partial class Game
             still: () => spellAcknowledged = SkillAcknowledgementAllowed(conn, gem.Effect, use.SkillId,
                 () => spellUse?.CommitNativeUse(conn, use.SkillId) ?? PlayerActionCurrent(conn, castAction)));
         if (moves) ResyncAfter(remote, stream, ciphers, conn, MovementSeconds(conn, gem.Effect, gem.Level), gem.Name!);
-        if (!spellProjectileRuntime && !spellAcknowledged) return;
+        if (!spellProjectileRuntime && !spellAcknowledged)
+        {
+            NoteRefusal(conn, use.SkillId, gem.Effect, gem.Name,
+                "the client did not confirm the use, so the cast was not made", use.TargetId, aim);
+            return;
+        }
         if (!spellProjectileRuntime) _ = CastGemSkill(remote, stream, ciphers, conn, use.SkillId, stand, aim, use.TargetId, sequence: use.Sequence,
             actionToken: spellUse?.ActionToken ?? castAction, cooldownUse: spellUse);
     }
@@ -673,16 +713,43 @@ static partial class Game
         int recoveryGeneration = 0;
         int? channelGeneration = null;
         VaalUseReservation? vaalUse = null;
+        // The three ways the effect never runs are recorded separately: a use that evaporates here used to leave no
+        // trace anywhere, which reads exactly like a hit that landed for zero (live 2026-11-09).
+        string? dropped = null;
         lock (conn.Monsters)
-            if (actionToken is not null && (conn.ActionCount != action || conn.ElementalAilments.ActionFactor(conn.Clock.Elapsed.TotalSeconds) == 0 || conn.HitRecovery.Active(conn.Clock.Elapsed.TotalSeconds))) return false;
-        if (InTown(conn) || conn.PlayerLife == 0) return false;
+            if (actionToken is not null)
+            {
+                bool laterAction = conn.ActionCount != action;
+                bool noActionSpeed = conn.ElementalAilments.ActionFactor(conn.Clock.Elapsed.TotalSeconds) == 0;
+                bool recovering = conn.HitRecovery.Active(conn.Clock.Elapsed.TotalSeconds);
+                if (laterAction || noActionSpeed || recovering)
+                    dropped = laterAction ? "a later action replaced this use before its effect"
+                        : noActionSpeed ? "the character was frozen, so the use was dropped"
+                        : "the character was in hit recovery, so the use was dropped";
+            }
+        if (dropped is not null)
+        {
+            NoteRefusal(conn, skillId, -1, null, dropped, targetId, to);
+            return false;
+        }
+        if (InTown(conn) || conn.PlayerLife == 0)
+        {
+            NoteRefusal(conn, skillId, -1, null, InTown(conn)
+                ? "the use was refused in town" : "the character is dead, so the use was dropped", targetId, to);
+            return false;
+        }
         await EndGracePeriod(remote, stream, ciphers, conn, action: true);
         var gem = GemSkillEffects(conn).FirstOrDefault(g => g.Id == skillId);
         bool Current() => (cooldownUse?.Current(conn) ?? (actionToken is null || PlayerActionCurrent(conn, action)))
             && (vaalUse is null || VaalAdmissionCurrent(conn, vaalUse))
             && (channelGeneration is not int generation || ChannelCurrent(conn, skillId, action, generation));
-        if (!Current()) return false;
-        if (gem.Name is not null && !ProjectilePathAvailable(remote, conn, skillId, gem.Effect)) return false;
+        if (!Current())
+        {
+            NoteRefusal(conn, skillId, -1, null,
+                "the use was cancelled before its effect: a later action, a closed area or an expired ticket", targetId, to);
+            return false;
+        }
+        if (gem.Name is not null && !ProjectilePathAvailable(remote, conn, skillId, gem.Effect, targetId, to)) return false;
         if (locationInstant && (gem.Name is null || !InstantLocationSkill.Supported(SkillsFor(conn), gem.Effect))) return false;
         if (gem.Name is not null && SkillsFor(conn).IsSpell(gem.Effect) && !SkillsFor(conn).IsAttack(gem.Effect)
             && CastMs(conn, gem.Effect) is null)
@@ -695,6 +762,7 @@ static partial class Game
         if (gem.Name is not null && GemSkillInstanceDisabled(conn, gem.Effect, skillId) is { } disabled)
         {
             Console.WriteLine($"[gateway] {remote} skill 0x{skillId:x4} {gem.Name}: {disabled} (disabled)");
+            NoteRefusal(conn, skillId, gem.Effect, gem.Name, $"the skill is disabled: {disabled}", targetId, to);
             await SendPlayerMana(remote, stream, ciphers, conn, $"0x01b1 player mana {conn.PlayerMana} (disabled skill, cost back)");
             return false;
         }
@@ -707,7 +775,12 @@ static partial class Game
         // Eligible uses arrive with their one original preflight reservation. Never reserve again after an await.
         if (cooldownUse is not null)
         {
-            if (!cooldownUse.TryExecute(conn, gem.Effect)) return false;
+            if (!cooldownUse.TryExecute(conn, gem.Effect))
+            {
+                NoteRefusal(conn, skillId, gem.Effect, gem.Name,
+                    "the cooldown reservation was refused when the use executed", targetId, to);
+                return false;
+            }
             if (!cooldownUse.Instant)
             {
                 if (UsesProjectileRuntime(gem.Effect)) ProjectilesFor(remote, stream, ciphers, conn)
@@ -1586,8 +1659,11 @@ static partial class Game
                 // current raw source so a refund between victims cannot keep granting from the sweep's old snapshot.
                 var rampagePlayer = freshPlayer ? player : null;
                 var rampageSource = RampageOnMeleeHitLocked(conn, m, !spell && SkillsFor(conn).IsMelee(gem.Effect), rampagePlayer);
+                uint lifeBefore = m.Life;
                 applied = ApplyMonsterHitLocked(conn, m, damage, rampageSource, rampagePlayer,
                     cull: Cull.Of(player, skillStats, critical, spell));
+                if (applied is not null)
+                    NoteOutgoing(conn, gem.Name, skillId, id, m, rolled, damage, critical, lifeBefore, at);
                 if (applied is not null)
                 {
                     if (critical) conn.RecentEvents.Record(StatConditions.Crit, at);
