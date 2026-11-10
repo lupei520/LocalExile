@@ -14,13 +14,31 @@ public sealed class GameModule : IModule
     {
         Rules.CombatLifetime = module.Lifetime;
         Program.SetGameLogic(new GameLogic(module.Lifetime));
+        module.OnTick((player, _) => global::DoedreSewers.Tick(Program.ConnOf(player)));
+        module.Lifetime.Own(GameEvents.ObjectUse.Add("Game", global::DoedreSewers.Use));
+        module.Lifetime.Own(GameEvents.PlayerStatSources.Add("Game", global::DoedreSewers.PlayerStats));
+        module.Lifetime.Own(global::DoedreSewers.CleanupOnUnload());
+        module.OnPlayerLeaving((player, _) => global::DoedreSewers.Leaving(Program.ConnOf(player)));
         module.OnTick((player, _) => global::BrineKing.Tick(Program.ConnOf(player)));
         // The Shaper and the Elder: one scripted step per connection per tick, their own fight state per monster.
         module.OnTick((player, _) => global::AtlasBosses.Tick(Program.ConnOf(player)));
-        module.Lifetime.Own(GameEvents.PlayerStatSources.Add("BrineKing", global::BrineKing.PlayerStats));
+        module.OnTick((player, _) => global::VaalOversoul.Tick(Program.ConnOf(player)));
+        module.OnTick((player, _) => global::DepravedTrinity.Tick(Program.ConnOf(player)));
+        module.Lifetime.Own(global::DepravedTrinity.CleanupOnUnload());
+        module.Lifetime.Own(GameEvents.ObjectUse.Add("Game", global::DepravedTrinity.Use));
+        module.Lifetime.Own(GameEvents.PlayerStatSources.Add("RottingCore", global::DepravedTrinity.PlayerStats));
+        module.OnPlayerLeaving((player, _) => global::DepravedTrinity.Leaving(Program.ConnOf(player)));
+        module.Lifetime.Own(global::VaalOversoul.CleanupOnUnload());
+        module.OnPlayerLeaving((player, _) => global::VaalOversoul.Leaving(Program.ConnOf(player)));
+        module.Lifetime.Own(GameEvents.PlayerStatSources.Add("Game", global::BrineKing.PlayerStats));
         module.Lifetime.Own(global::BrineKing.CleanupOnUnload());
         module.Lifetime.Own(global::AtlasBosses.CleanupOnUnload());
         module.Lifetime.Own(GameEvents.Kill.Add("Game", Rules.ReservationKill));
+        module.OnTick((player, _) => global::Slayer.Tick(Program.ConnOf(player)));
+        module.Lifetime.Own(GameEvents.Kill.Add("Game", global::Slayer.Kill));
+        module.Lifetime.Own(GameEvents.PlayerStatSources.Add("Game", global::Slayer.PlayerStats));
+        module.Lifetime.Own(GameEvents.OutgoingDamage.Add("Game", global::Slayer.OutgoingDamage));
+        module.OnPlayerLeaving((player, _) => global::Slayer.Leaving(Program.ConnOf(player)));
         module.OnPlayerLeaving((player, _) => global::BrineKing.Leaving(Program.ConnOf(player)));
     }
 }

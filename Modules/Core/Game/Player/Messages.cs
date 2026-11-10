@@ -241,6 +241,10 @@ static partial class Game
                 // A lockstep client's forced stationary default attack swings where the player stands. Ordinary ground
                 // melee uses take StartLockstepGroundMelee's frame-stepped walk-up before reaching this handler.
                 bool inPlace = cast || conn.LockstepClient && use.SkillId == SkillCatalog.FirstSkillId;
+                // Flicker Strike on the ground goes to the monster in range nearest to the point (FlickerStrike), else
+                // strikes where the player stands; the server teleports the player, which the client does not.
+                bool flicker = cast && gem.Name is not null && SkillsFor(conn).ActionHash(gem.Effect) == FlickerStrike.Action;
+                (uint Id, (int X, int Y) At, (int X, int Y) Landing)? flickerTo = null;
                 void StartAction()
                 {
                     at = Math.Max(at, conn.ProjectileRuntime?.Runtime.Now / 120000d ?? 0);
@@ -250,6 +254,11 @@ static partial class Game
                     // Readiness and reservation precede movement: a raw early Dash cannot teleport anyway. Shield Charge walks
                     // there at its own speed instead (ShieldCharge.cs).
                     if (chargeBonus != 0) chargeToken = BeginShieldCharge(conn, use.SkillId, chargeBonus, use.X, use.Y, at);
+                    else if (flicker)
+                    {
+                        flickerTo = FlickerDestination(conn, gem.Effect, use.SkillId, (px, py), (use.X, use.Y), 0, at);
+                        if (flickerTo is { } to) conn.Walk.Teleport(to.Landing.X, to.Landing.Y, at);
+                    }
                     else if (gem.Name is not null && LandsAtAim(conn, gem.Effect))
                     {
                         var landing = MovementLanding(conn, gem.Effect, (px, py), (use.X, use.Y));
@@ -296,7 +305,14 @@ static partial class Game
                 Mark("echo");
                 if (!projectileRuntime && !acknowledged) continue;
                 if (cooldownUse?.Current(conn) == false) continue;
-                if (cast && !projectileRuntime) _ = CastGemSkill(remote, stream, ciphers, conn, use.SkillId, (px, py), (use.X, use.Y), sequence: use.Slot,
+                if (flickerTo is { } flickerDestination)
+                    await Send(remote, stream, ciphers, InstanceProtocol.Teleport(PlayerId, flickerDestination.Landing.X, flickerDestination.Landing.Y),
+                        $"0x01b7 {gem.Name} to ({flickerDestination.Landing.X}, {flickerDestination.Landing.Y}) for monster 0x{flickerDestination.Id:x} "
+                        + $"at ({flickerDestination.At.X}, {flickerDestination.At.Y}) (t={at:0.000})");
+                if (flicker) await GrantFlickerSpeed(remote, stream, ciphers, conn, use.SkillId);
+                // Flicker Strike strikes from where it lands, at the monster it went to (or the point, when none was in range).
+                var (strikeFrom, strikeAt) = flickerTo is { } struck ? (struck.Landing, struck.At) : ((px, py), (use.X, use.Y));
+                if (cast && !projectileRuntime) _ = CastGemSkill(remote, stream, ciphers, conn, use.SkillId, strikeFrom, strikeAt, sequence: use.Slot,
                     actionToken: cooldownUse?.ActionToken ?? action, cooldownUse: cooldownUse);
                 // The server lands a movement skill at once, and the client can refuse it or take its time (a Lightning Warp
                 // often does neither, live 2026-11-01): the resync settles which, once the action is over.
@@ -553,20 +569,20 @@ static partial class Game
             }
             else if (id == InstanceProtocol.ChannelUpdateId)
             {
-                // A channelled skill (Cyclone) goes on where the player now is: it moves there. Its hits run on their own
-                // timer (RunChannel), at the skill's attack rate, wherever the player is.
+                // A channelled skill (Cyclone) goes on, aimed at this cell: Cyclone walks toward it (ChannelAimedAt). Its hits
+                // run on their own timer (RunChannel), at the skill's attack rate, wherever the player is.
                 var (cx, cy) = InstanceProtocol.ReadChannelUpdate(bytes);
                 double t = conn.ClockAt(readAt);
                 using (ProjectileMutation(conn))
                 {
                     t = Math.Max(t, conn.ProjectileRuntime?.Runtime.Now / 120000d ?? 0);
                     if (PlayerActionBlocked(conn, t, conn.Clock.Elapsed.TotalSeconds)) continue;
-                    conn.Walk.Teleport(cx, cy, t);
+                    ChannelAimedAt(conn, cx, cy, t);
                     conn.LastChannelUpdateAt = conn.Clock.Elapsed.TotalSeconds;
                 }
             }
             else if (id == InstanceProtocol.ChannelEndId)
-                lock (conn.Monsters) { conn.ChannelSkill = 0; conn.ChannelGeneration++; }
+                ChannelReleased(conn, conn.ClockAt(readAt));
             else if (id == InstanceProtocol.SwapWeaponsId)
             {
                 // The weapon swap: the hands' rows and the other set's trade their items (the client shows the active set in

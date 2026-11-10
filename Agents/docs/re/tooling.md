@@ -348,7 +348,7 @@ How 3.29.3b → 3.29.3c was ported; every step maps from evidence, nothing by of
    name (`byte_table_0x…`) is not matched. `rewrite_message_ids.py <report.tsv> --shift first:last:delta …` moves
    message ids; its report needs reading line by line, since stat keys, offsets after another id (`0x22 + 0x2b9`) and
    ClientStrings rows share the range. Re-check every script's code signature against the new executable.
-## 12. 3.29.3c: the 3.29.3b addresses do not apply
+# 12. 3.29.3c: the 3.29.3b addresses do not apply
 
 Most notes in `Agents/docs/re/` and `Agents/docs/protocol/` were derived from the 3.29.3b image. The client this
 checkout runs is 3.29.3c: not only do the message ids shift by +2 ([3.29.3c diff](3.29.3c-client-diff.md)), the
@@ -374,3 +374,13 @@ token, and the repository path contains a space, so the launcher must be given t
 (`F:\LOCALE~1`). `scripts/re/ghidra/import-game3293.cmd` and `gh.cmd` set all of that up; a `-analysisTimeoutPerFile`
 cap makes the import finish and save (`gh-write.cmd` keeps a script's disassembly). The analyzer pass stalls in its
 decompiler-based analyzers on this image, so plan on a capped pass plus the scripts above rather than a complete one.
+
+**The 3.29.3.5 hotfix needs no port.** Its `PathOfExile.exe` (build 328126, still "3.29.3c") has the 3.29.3c release's
+sections and all 148,967 `.pdata` functions at the same addresses; every `.text` difference is a RIP-relative
+displacement, because `.rdata` and `.data` moved by a few bytes (mostly -0x30, +0x10, -0x80). Code addresses and
+message ids are unchanged; addresses of globals, vtables and strings are not, so a script that uses one needs the
+hotfix value. The login-key offset (`0x2fc91f0`) and the HNC mask are equal. The patch changed only
+`Bundles2/Tiny_02.bundle.bin` and the index: no table, and one server-read file
+(`metadata/pet/edictspearutilitypet/edictspearutilitypet.ot`). Check a future hotfix the same way: if the `.pdata`
+tables are equal, only data addresses need the new values.
+

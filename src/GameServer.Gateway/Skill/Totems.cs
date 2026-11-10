@@ -69,8 +69,8 @@ sealed class TotemState
         /// its Life was computed at (the gem's <c>PlayerLevelReq</c>). Derivation facts kept for the lab's
         /// <c>/totems</c> listing and its ledger label, which have no gem at hand: the connection's gem list is the
         /// player's, and a totem outlives the socket it came from. The client only ever sees them in the object it was
-        /// created with.</summary>
-        public int Effect => effect;
+        /// created with. A spell totem's executor writes the row it runs here instead.</summary>
+        public int Effect = effect;
         public int Row => row;
         public string VarietyId => varietyId;
         public int Level => level;
@@ -89,6 +89,15 @@ sealed class TotemState
         public Devour? Devour => devour;
         /// <summary>Whether the monsters near it are drawn to it (Decoy Totem).</summary>
         public bool Taunt => taunt;
+        /// <summary>The gem the totem was summoned from, and the host and item it came with: a spell totem's executor
+        /// reads them to tell whether the gem is still the one that summoned it.</summary>
+        public uint SourceGem;
+        public uint SourceHost;
+        public Item? SourceItem;
+        public bool Ballista;
+        public int BonusSlots;
+        public double NextCast;
+        public ushort Sequence;
         public uint Life = maxLife;
         /// <summary>When it died; null while it lives.</summary>
         public double? DiedAt;
@@ -106,11 +115,24 @@ sealed class TotemState
     public IEnumerable<Totem> Living(double now) => _totems.Where(t => t.Alive(now));
 
     /// <summary>Adds a totem; the oldest living ones die until at most <paramref name="limit"/> live. The ones it replaced.</summary>
-    public List<Totem> Place(Totem totem, int limit, double now)
+    public List<Totem> Place(Totem totem, int limit, double now, int? ordinaryLimit = null)
     {
         var replaced = new List<Totem>();
-        foreach (var old in Living(now).ToList())
-            if (Living(now).Count() >= limit) { old.DiedAt = now; replaced.Add(old); }
+        void Retire(Totem old) { old.DiedAt = now; replaced.Add(old); }
+        if (ordinaryLimit is int ordinary)
+        {
+            // Ballista-only bonus slots do not let ordinary totems exceed their own cap. Placing one ordinary
+            // totem beside two ballistas must not remove both ballistas as the old all-totem limit of one did.
+            if (!totem.Ballista)
+                foreach (var old in Living(now).Where(t => !t.Ballista).ToArray())
+                    if (Living(now).Count(t => !t.Ballista) >= limit) Retire(old);
+            int bonus = Math.Max(totem.BonusSlots, Living(now).Where(t => t.Ballista).Select(t => t.BonusSlots).DefaultIfEmpty(0).Max());
+            int total = Math.Max(limit, (int)Math.Min(int.MaxValue, (long)ordinary + bonus));
+            while (Living(now).Count() >= total && Living(now).FirstOrDefault() is { } oldest) Retire(oldest);
+        }
+        else
+            foreach (var old in Living(now).ToArray())
+                if (Living(now).Count() >= limit) Retire(old);
         _totems.Add(totem);
         return replaced;
     }

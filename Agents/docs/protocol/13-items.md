@@ -249,8 +249,9 @@ changes nothing. Nessa's **Identify Items** identifies the whole main inventory 
 
 ## 2c. Mods on the character
 
-`ItemModStats.cs`. The items in the worn equipment rows (Inventories.dat 1-10: body armour, the first weapon set,
-helmet, amulet, rings, gloves, boots, belt; not the second weapon set or the flasks) count, with every mod list. The
+`ItemModStats.cs`. The items in the worn equipment rows (Inventories.dat rows 1-10: body armour, the first weapon set,
+helmet, amulet, rings, gloves, boots and belt, and row 102 Ring3, the third ring slot the client shows while The Unseen
+Hand's `enable_ring_slot_3` stat is set; not the second weapon set or the flasks) count, with every mod list. The
 client does not let the player equip an unidentified item, so only identified items reach these rows. A stat that
 Stats.dat marks **IsLocal** belongs to its item; every other stat is the character's: it is added to the allocated
 passives' stats (`CharacterStatSources`), so it reaches the pools (`PassiveBonus` → `CharacterStats.For`: life, mana,
@@ -372,8 +373,8 @@ The export ties an implicit to any row with that text, often an old base's, so a
 unless a line names a unique's own row, the base has none, or the implicit is Eldritch; `Definition.Implicits` replaces
 them on 9 uniques. `Definition.Ranges` holds a roll that differs from the Mods.dat row, per list since a mod can be in
 both, and the generator's `STALE_ROLLS` drops the export's rolls where the row and poedb agree against it.
-Divine and Blessed Orbs reroll in these ranges (`UniqueCatalog.RollsOf`), and an admin's `/game_data mod` range wins over
-them. `Definition.Fractured` counts the fractured explicits, which come first (6 uniques).
+Divine and Blessed Orbs reroll in these ranges (`UniqueCatalog.RollsOf`), and a range in world.db's `mod_stat_overrides` wins
+over them. `Definition.Fractured` counts the fractured explicits, which come first (6 uniques).
 It writes no item level: a definition uses 86, and drops use their own. Item text the export has instead of a mod id
 resolves through `ModTextMap.lua` when a unique mod's roll fits; the rest is left out and listed by the run (the
 timeless jewels and Pure Talent, which have their own code, and about 25 lines of other uniques).
@@ -1157,10 +1158,10 @@ The kit is built once, when the character has no save, and saved at once: admiss
 (`PlayerInventories.SetClass`) and passes its read-only progress preflight first, because a kit built without the class
 would be the Witch's. Without `data/tables` (`Characters.json`,
 `SkillGems.json`) and `data/item-types.json` it is empty, the Gateway logs `start kit is empty`, and the character keeps
-the empty kit: remove its row from the `characters` table of `data/saves.db` (with the Gateway stopped) to give it the kit
+the empty kit: remove its row from the `characters` table of `data/characters.db` (with the Gateway stopped) to give it the kit
 again.
 
-**Saves.** Every inventory change writes the character's items to its row in `data/saves.db` (`CharacterSaves`,
+**Saves.** Every inventory change writes the character's items to its row in `data/characters.db` (`CharacterSaves`,
 git-ignored): per Inventories.dat row the item ids, cells and items by BaseItemTypes HASH32 with level, quality, charges,
 stack size, sockets (with their gems), links and gem experience. A saved character loads from it instead of the start
 kit, so items and equipment survive Gateway restarts and logins (live 2026-10-18). The save also holds the skill bar
@@ -1310,7 +1311,7 @@ the Ruthless uses; verifier code/review was completed after capture. Earlier 18 
 All test stock, cells and charges were restored, representative level100 relogs passed in both modes, and the
 post-run audit preserved all eight identities, both original probes, both stash banks/40 tabs and untouched level20
 saves. Only normal participant last-played timestamps changed. Source/build/input hashes held, observers detached,
-the client closed, and the normal `data/saves.db` services were restored. Source removal/zero next-use controls,
+the client closed, and the normal `data/characters.db` services were restored. Source removal/zero next-use controls,
 active-use source changes, local/magic composition, named-unique acquisition and tooltip parity remain separate.
 Local receipts are under `artifacts/issue75-completion/flask-effect2-native/` (captures, operation journal, verdicts
 and cleanup), `flask-effect2-native-assessment/` (frozen policy and reviewed verifier revisions), and
@@ -1338,7 +1339,7 @@ an official rounding claim. The separate ordinary heal/hit/use bootstrap was cap
 
 The final recovery3 session logged out/detached cleanly with 769 frozen inputs unchanged, preserved original saves
 and all six canonical full inventories, and was followed by parent-verified client closure and normal
-`data/saves.db` restoration. Earlier recovery1 binding failures, recovery2 Life-readiness failure and its vendor
+`data/characters.db` restoration. Earlier recovery1 binding failures, recovery2 Life-readiness failure and its vendor
 response failure remain recorded separately. These results do not prove every zero row, legal acquisition of the
 controlled modifier carriers, a complete on-kill engine or the full native matrix.
 

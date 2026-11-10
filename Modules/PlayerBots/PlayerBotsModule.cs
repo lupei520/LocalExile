@@ -24,17 +24,24 @@ public sealed class PlayerBotsModule : IModule
         module.Lifetime.Own(new StopOnDispose(director.Stop));
         director.Start();
         // Parties with bots (BotParty): the Social module passes on the invites and parties that are not its own.
-        module.OnPacket(InstanceSocial.PartyInviteId, p => director.Invite(Program.ConnOf(p.Player), InstanceSocial.ReadPartyInvite(p.Bytes.ToArray())));
+        module.OnPacket(InstanceSocial.PartyInviteId, async p =>
+            await director.Invite(Program.ConnOf(p.Player), InstanceSocial.ReadPartyInvite(p.Bytes.ToArray())) != BotInvite.NotFound);
         module.OnPacket(InstanceSocial.PartyLeaveId, p => director.Leave(Program.ConnOf(p.Player), InstanceSocial.ReadPartyAccept(p.Bytes.ToArray())));
         module.OnPacket(InstanceSocial.PartyKickId, p => director.Kick(Program.ConnOf(p.Player), InstanceSocial.ReadPartyKick(p.Bytes.Span)));
         // '/botinvite <name>': the same invite the party panel sends (C→S 0x93), for a player who names a bot in chat
-        // instead of the panel. The Social module's '/invite' only knows real players.
+        // instead of the panel. The Social module's '/invite' only knows real players. '/botleave' takes the party away
+        // again, so a bot can be tried out without opening the social panel.
         module.OnChatCommand("botinvite", "/botinvite <bot name> (invite a bot you can see into your party)", async cmd =>
         {
             string name = string.Join(' ', cmd.Args).Trim();
             if (name.Length == 0) { await director.Tell(cmd.Player, "用法：/botinvite <机器人名字>"); return; }
-            bool joined = await director.Invite(Program.ConnOf(cmd.Player), name);
-            await director.Tell(cmd.Player, joined ? $"{name} 已加入队伍。" : $"没找到你能看见的机器人 \"{name}\"（名字见 Modules/PlayerBots/state/bots.json）。");
+            var result = await director.Invite(Program.ConnOf(cmd.Player), name);
+            await director.Tell(cmd.Player, result switch
+            {
+                BotInvite.Joined => $"{name} 已加入队伍。",
+                BotInvite.Refused => $"已经有五个机器人跟着你了，{name} 留在了原地。",
+                _ => $"没找到你能看见的机器人 \"{name}\"（名字见 Modules/PlayerBots/state/bots.json）。",
+            });
         });
         module.OnChatCommand("botleave", "/botleave (the bots following you leave and go back to their quests)", async cmd =>
         {

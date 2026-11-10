@@ -102,15 +102,14 @@ static class MonitorTune
         if (!body.TryGetProperty("value", out var value) || value.ValueKind is not JsonValueKind.Number
             || !value.TryGetDouble(out double number))
             return Fail("a numeric value is required", 400);
-        if (!SystemSettings.Validate(key, number, out string? error))
+        if (!SystemSettings.Validate(key, number, SystemSettings.Default.Values, out string? error))
             return Fail(error!, 400);
 
-        var store = GameData.Store;
-        if (store is null)
+        if (GameData.Store is null)
             return Fail("the game-data store is not open", 500);
         try
         {
-            store.SetSetting(key, number);
+            Apply("monitor tune", $"INSERT OR REPLACE INTO system_settings (key, value) VALUES ('{key}', {number.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
             GameData.Reload("monitor tune");
             return (new JsonObject
             {
@@ -129,8 +128,7 @@ static class MonitorTune
     {
         if (!MonitorGrant.Authorized(body, out int status, out string refusal))
             return Fail(refusal, status);
-        var store = GameData.Store;
-        if (store is null)
+        if (GameData.Store is null)
             return Fail("the game-data store is not open", 500);
         // No key: every tunable one. With one: just that, refused when it is not tunable.
         List<string> targets = body.TryGetProperty("key", out var k) && k.ValueKind is JsonValueKind.String
@@ -138,19 +136,41 @@ static class MonitorTune
         try
         {
             var restored = new JsonArray();
+            var rows = new List<string>();
             foreach (string target in targets)
             {
                 if (!Keys.Contains(target))
                     return Fail($"\"{target}\" is not a tunable setting", 400);
-                store.DeleteSetting(target);
+                // Back to the default the seeds carry.
+                rows.Add($"('{target}', {SystemSettings.Seeds.GetValueOrDefault(target).ToString(System.Globalization.CultureInfo.InvariantCulture)})");
                 restored.Add(target);
             }
+            Apply("monitor tune reset",
+                $"INSERT OR REPLACE INTO system_settings (key, value) VALUES\n{string.Join(",\n", rows)};");
             GameData.Reload("monitor tune reset");
             return (new JsonObject { ["ok"] = true, ["restored"] = restored }.ToJsonString(), JsonType, 200);
         }
         catch (Exception e) when (e is IOException or Microsoft.Data.Sqlite.SqliteException or ArgumentException)
         {
             return Fail($"the reset failed: {e.Message}", 500);
+        }
+    }
+
+    /// <summary>Applies one SQL statement to world.db the way the servers do: a pending update file, applied by the
+    /// updater, so the change is a row like any other and survives a restart.</summary>
+    static void Apply(string reason, string statement)
+    {
+        string folder = Path.Combine(GameServer.Storage.SqlUpdater.Root, "updates", "pending_world");
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, $"monitor_tune_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.sql");
+        File.WriteAllText(path, $"-- The monitor's {reason}.\n{statement}\n", new System.Text.UTF8Encoding(false));
+        try
+        {
+            GameServer.Storage.SqlUpdater.Update(GameData.DefaultPath, "world", log: Console.Error.WriteLine);
+        }
+        finally
+        {
+            // The update is applied; the file stays pending so the change is in the repository's next commit.
         }
     }
 
