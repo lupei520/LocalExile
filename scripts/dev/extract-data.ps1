@@ -29,6 +29,11 @@ $manifest = @(
     @{ Name = 'item-types'; Outputs = @('data\item-types.json'); Runner = 'python'
        Args = @('scripts/re/ot_components.py', '--items', '--json', 'data/item-types.json'); Version = 2; Needs = @('tables')
        UsedBy = 'items: starting items, /item, drops, affix rolls (tags), quest items'' Quest flags' }
+    # item-art: every base type's inventory picture (the GGPK's uncompressed RGBA8 DDS, decoded to PNG) with an index of
+    # base id to file, so the monitor's forge page shows an item's own art without the server opening the 68 GB archive.
+    @{ Name = 'item-art'; Outputs = @('data\item-art\index.json'); Runner = 'dotnet'
+       Args = @('run', '--project', 'scripts/re/ggdump', '--', 'Client/Content.ggpk', 'data/item-art', 'art'); Version = 1; Needs = @('tables')
+       UsedBy = 'item pictures on the monitor''s forge page (item art, Development/debugging.md "The monitor")' }
     @{ Name = 'delve-paths'; Outputs = @('data\delve-paths.json'); Runner = 'dotnet'
        Args = @('run', '--project', 'scripts/re/atlas', '--', 'Client/Content.ggpk', 'delve-paths'); Version = 1; Needs = @('tables')
        UsedBy = 'authored Delve rail nodes, endpoints and room links' }

@@ -51,6 +51,8 @@ static class MonitorForgePage
   .slot::after { content:""; position:absolute; inset:7px; border:1px dashed #262c37; border-radius:8px; pointer-events:none; }
   .slot .cell { position:absolute; right:12px; top:10px; font-size:11px; color:#5d6675; }
   .card { position:relative; z-index:1; max-width:520px; margin:0 auto; }
+  .card .artwrap { text-align:center; margin:2px 0 8px; }
+  .card .art { max-height:118px; max-width:100%; filter:drop-shadow(0 4px 8px #0009); }
   .card .name { font-size:16px; font-weight:600; text-align:center; }
   .card .base { text-align:center; font-size:12px; color:var(--dim); margin-top:2px; }
   .card .sep { height:1px; background:linear-gradient(90deg,transparent,#2f3644,transparent); margin:9px 0; }
@@ -157,7 +159,7 @@ const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '
 const RARITY = { normal:'#c8c8c8', magic:'#8888ff', rare:'#ffff77', unique:'#af6025' };
 const S = { classes: [], bases: [], base: null, affixes: { prefix: [], suffix: [], crafted: [] }, caps: null,
             implicits: [], item: { rarity: 'rare', itemLevel: 84, quality: 20, sockets: '', states: [], mods: [] },
-            tab: 'prefix', card: null, note: '' };
+            tab: 'prefix', card: null, note: '', art: '' };
 const token = () => $('#token').value;
 
 function say(text, bad) { $('#res').innerHTML = '<span class="' + (bad ? 'bad' : 'ok') + '">' + esc(text) + '</span>'; }
@@ -189,8 +191,16 @@ function renderBases() {
 }
 function pickBase(id) {
   if (S.base && S.base.id === id) return;
-  S.item.mods = []; S.card = null;
+  S.item.mods = []; S.card = null; S.art = '';
   loadBase(id);
+}
+// The item's own picture: the client's art, decoded offline (data/item-art) and handed over as a data URL.
+async function loadArt(baseId) {
+  try {
+    const d = await (await fetch('/forge/art?base=' + encodeURIComponent(baseId), { cache: 'no-store' })).json();
+    S.art = d.ok && d.data ? d.data : '';
+  } catch (e) { S.art = ''; }
+  if (S.base && S.base.id === baseId) renderItem();
 }
 async function loadBase(id) {
   const ilvl = clamp(parseInt($('#ilvl').value, 10) || 84, 1, 100);
@@ -206,6 +216,7 @@ async function loadBase(id) {
     + ' · 最大孔 ' + S.base.sockets + (req.length ? ' · 需求 ' + req.join('/') : '')
     + ' · 可出词缀 ' + S.affixes.prefix.length + '+' + S.affixes.suffix.length;
   renderBases(); renderAffixes(); renderItem();
+  loadArt(id);
 }
 
 // ── 词缀列表 ───────────────────────────────────────────────────────────────
@@ -275,6 +286,8 @@ function addAffix(id) {
 }
 
 // ── 物品槽 ─────────────────────────────────────────────────────────────────
+// The item's own picture, when the server has one for this base (a data URL, so it needs no escaping).
+function art() { return S.art ? '<div class="artwrap"><img class="art" src="' + S.art + '" alt=""></div>' : ''; }
 function renderItem() {
   const slot = $('#slot');
   if (!S.base) { slot.innerHTML = '<div class="empty">← 先在左边挑一个底子</div>'; return; }
@@ -298,6 +311,7 @@ function renderItem() {
       + '<button class="x" data-del="' + i + '" title="去掉">×</button></div>';
   };
   slot.innerHTML = '<div class="cell">' + S.base.width + '×' + S.base.height + '</div><div class="card">'
+    + art() 
     + '<div class="name" style="color:' + colour + '">' + esc(S.base.name) + '</div>'
     + '<div class="base">' + esc(S.base.name) + ' · ' + esc(S.base.className) + '</div>'
     + '<div class="sep"></div><div class="props">' + esc(facts.join(' · ')) + '</div>'
@@ -322,7 +336,7 @@ function renderItem() {
 function renderCard() {
   const colour = RARITY[S.cardRarity || 'rare'] || '#d8dee9';
   $('#slot').innerHTML = '<div class="banner">服务器预览：名称与数值都是真的</div>'
-    + '<div class="card">' + S.card.map(l =>
+    + '<div class="card">' + art() + S.card.map(l =>
         '<div class="line"><span class="txt ' + esc(l.kind) + '" style="' + (l.kind === 'name' ? 'text-align:center;font-size:16px;font-weight:600;color:' + colour : '')
         + '">' + (l.tier ? '<span class="tag">T' + l.tier + '</span> ' : '') + esc(l.text) + '</span></div>').join('') + '</div>';
 }

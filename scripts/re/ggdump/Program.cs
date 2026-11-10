@@ -1,7 +1,11 @@
 // usage: dotnet run --project scripts/re/ggdump -- <Content.ggpk> <outDir> <path>...   (e.g. Data/Inventories.datc64)
 using GameServer.Data.Ggpk;
+using GameServer.Data.Images;
 using GgDump;
 // usage: GgDump <ggpk> <outDir> <path>...   (or "list <regex>" as first path to search every path in the index)
+//        GgDump <ggpk> <outDir> extract <include> <exclude> <minFreeGB> [limit]
+//        GgDump <ggpk> <outDir> plan
+//        GgDump <ggpk> <outDir> art [tablesDir]
 // The repository root: the first parent of the build output that has Tools/ooz.
 string root = AppContext.BaseDirectory;
 while (!File.Exists(Path.Combine(root, "Tools", "ooz", "ooz_worker.mjs")))
@@ -72,6 +76,61 @@ if (args.Length > 5 && args[2] == "extract")
         }
     }
     Console.WriteLine($"extract finished: {written} written, {skipped} skipped, {failed} failed, {clock.Elapsed:hh\\:mm\\:ss}");
+    return;
+}
+// "art [tablesDir]": every base type's inventory picture as a PNG in <outDir>, plus <outDir>/index.json mapping a base
+// id to its file. The art is uncompressed RGBA8 in the GGPK (DdsImage says why) and a browser wants a PNG (PngImage), so
+// this is the one place that knows both; a page then reads a small file instead of opening the 68 GB archive.
+if (args.Length > 2 && args[2] == "art")
+{
+    string tables = args.Length > 3 ? args[3] : "data/tables";
+    using var baseRows = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(tables, "BaseItemTypes.json")));
+    using var visualRows = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(tables, "ItemVisualIdentity.json")));
+    string[] dds = [.. visualRows.RootElement.EnumerateArray()
+        .Select(r => r.TryGetProperty("DDSFile", out var f) ? f.GetString() ?? "" : "")];
+    Directory.CreateDirectory(args[1]);
+    var pictures = new Dictionary<string, (string File, int Width, int Height)>(StringComparer.OrdinalIgnoreCase);
+    var index = new System.Text.Json.Nodes.JsonObject();
+    int written = 0, missing = 0, refused = 0, shared = 0;
+    foreach (var row in baseRows.RootElement.EnumerateArray())
+    {
+        string id = row.GetProperty("Id").GetString() ?? "";
+        if (!row.TryGetProperty("ItemVisualIdentity", out var visual) || visual.ValueKind is not System.Text.Json.JsonValueKind.Number)
+        {
+            missing++;
+            continue;
+        }
+        int at = visual.GetInt32();
+        if (at < 0 || at >= dds.Length || dds[at].Length == 0)
+        {
+            missing++;
+            continue;
+        }
+        string path = dds[at];
+        if (!pictures.TryGetValue(path, out var picture))
+        {
+            if (!fs.TryReadFile(path, out var data)) { missing++; continue; }
+            var image = DdsImage.Read(data, out string? why);
+            if (image is null) { Console.WriteLine($"art: {path}: {why}"); refused++; continue; }
+            // A file name per picture: the art path with its separators flattened, which stays readable in a directory
+            // listing ("Rings_Ring1.png") and is unique because the path is.
+            string name = path.Replace("Art/2DItems/", "", StringComparison.OrdinalIgnoreCase).Replace('/', '_');
+            if (name.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) name = name[..^4] + ".png";
+            if (pictures.Values.Any(p => string.Equals(p.File, name, StringComparison.OrdinalIgnoreCase))) name = $"{name}_{++shared}";
+            File.WriteAllBytes(Path.Combine(args[1], name), PngImage.Encode(image.Width, image.Height, image.Rgba));
+            picture = pictures[path] = (name, image.Width, image.Height);
+            written++;
+            if (written % 250 == 0) Console.WriteLine($"art: {written} pictures written");
+        }
+        index[id] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["file"] = picture.File, ["width"] = picture.Width, ["height"] = picture.Height,
+        };
+    }
+    File.WriteAllText(Path.Combine(args[1], "index.json"),
+        new System.Text.Json.Nodes.JsonObject { ["bases"] = index }.ToJsonString());
+    Console.WriteLine($"art: {index.Count} bases indexed, {written} pictures written, "
+        + $"{pictures.Count} distinct files, {missing} bases without art, {refused} refused");
     return;
 }
 // "plan": every path's location to <outDir>/paths.tsv and the index's size by extension to <outDir>/extensions.tsv.

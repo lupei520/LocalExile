@@ -98,7 +98,9 @@ Part of [Status](../Status.md); what to build next in this area is in
   cancelling returns what is left. `GET /forge` is a crafting simulator on its own page: it lists one base's own affix
   pools with the roll ranges and tiers the market card shows, refuses an affix the base cannot roll at that item level (or
   a second roll of one affix line, which the family data alone would allow), and `POST /forge` grants the composed item
-  like `/grant`; `POST /forge/preview` answers its card and places nothing. `GET /tune` lists the world and loot
+  like `/grant`; `POST /forge/preview` answers its card and places nothing, and the slot shows the base's own art
+  (`GET /forge/art?base=`, decoded offline into `data/item-art` by `ggdump art` — the archive's art bundles are Selkie,
+  which the server's own Oodle decoder cannot read). `GET /tune` lists the world and loot
   settings an admin may change (the drop multipliers per kind, the global item quantity, pack density and size, the
   rare/magic pack chances and the rare-pack floor, experience and gold), `POST /tune` writes one through the same
   path the `/game_data setting` command uses (a live reload, no restart) and `POST /tune/reset` restores one or all
@@ -106,7 +108,9 @@ Part of [Status](../Status.md); what to build next in this area is in
   The forge is checked with a throwaway Gateway on private ports and the real catalogs (1,607 bases in 33 classes; an Iron
   Ring's 80 prefixes, 126 suffixes and 141 bench crafts; a preview card carrying the base's own implicit, with the life
   tiers grouped and refused when two of them are asked for) — nothing was granted, so no item was placed and the save
-  database was only read.
+  database was only read. The art is checked the same way: `ggdump art` decoded all 3,115 distinct pictures of the 5,461
+  base types (0 refused; every base type in the game has one), and the served bytes of an Iron Ring's picture are
+  byte-identical to the decoded file, with an unknown base answering a reason instead of an image.
   Checked with a headless browser and a Gateway on private ports, everything against a copy of the save database (a stack
   merged onto the pile already there, equipment into free cells, a listed tab searched back, an item's note overriding the
   tab's, an unpriced item dropping out, a buy that paid, moved the item and charged the fee, a second buy of the same

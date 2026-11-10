@@ -47,12 +47,15 @@ static class MonitorForge
                 return (BaseList(), JsonType, 200);
             case "/forge/base" when method == "GET":
                 return (BaseAffixes(ServerMonitor.Query(query, "base") ?? "", Int(ServerMonitor.Query(query, "ilvl"))), JsonType, 200);
+            // The item's own picture (Monitoring/ItemArt.cs), decoded offline from the client's art.
+            case "/forge/art" when method == "GET":
+                return (ItemArt.Answer(ServerMonitor.Query(query, "base") ?? ""), JsonType, 200);
             case "/forge/preview" when method == "POST":
                 return body is { } preview ? Preview(preview) : plain("a JSON body is required", 400);
             case "/forge" when method == "POST":
                 return body is { } asked ? Forge(asked) : plain("a JSON body is required", 400);
-            case "/forge" or "/forge/list" or "/forge/base" or "/forge/preview":
-                return plain("GET /forge (the page), GET /forge/list, GET /forge/base?base=&ilvl=, POST /forge/preview, POST /forge", 405);
+            case "/forge" or "/forge/list" or "/forge/base" or "/forge/art" or "/forge/preview":
+                return plain("GET /forge (the page), GET /forge/list, GET /forge/base?base=&ilvl=, GET /forge/art?base=, POST /forge/preview, POST /forge", 405);
             default:
                 return null;
         }

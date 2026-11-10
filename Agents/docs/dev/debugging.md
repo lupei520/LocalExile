@@ -99,8 +99,13 @@ suffixes are capped as the rolls cap them (three and three, two and two on jewel
 base's implicit is composed with the item, since `ItemCrafter.Build` makes exactly the mods it is given. The second rule
 is not discoverable from the affix data alone: the life tiers carry no `Family` at all, so the family rule would let two
 of them on. `POST /forge/preview` answers the composed item's card and places nothing; `POST /forge` grants it like
-`/grant` above, with the same token.
-Code: `src/GameServer.Gateway/Monitoring/MonitorForge.cs` (the routes), `MonitorForgePage.cs` (the page).
+`/grant` above, with the same token. The slot shows the base's own art: `GET /forge/art?base=<id>` answers a PNG data URL
+out of `data/item-art` (extract-data.ps1's `item-art` entry, written by `ggdump art`). The archive's art is plain
+uncompressed RGBA8, but its bundles are Selkie-compressed, which the Gateway's in-process Oodle decoder (`ManagedOodleDecoder`)
+cannot read — and opening the client's 68 GB archive to show an 80x80 icon is not a
+running server's job — so the pictures are decoded once, offline, and the server only reads a few kilobytes.
+Code: `src/GameServer.Gateway/Monitoring/MonitorForge.cs` (the routes), `MonitorForgePage.cs` (the page),
+`ItemArt.cs` (the pictures), `src/GameServer.Data/Images/` (the DDS reader and the PNG writer).
 
 The market is the official one, indexed ([market.md](market.md)): `/market` is every item in a **public premium tab** that
 carries a price note, with the seller's online state, the filters (name, class, rarity, currency, price range, online

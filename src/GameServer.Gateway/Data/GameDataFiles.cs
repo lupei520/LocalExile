@@ -18,6 +18,7 @@ static class GameDataFiles
         ("data/tables/InfluenceTags.json", "influence mods (rolls on influenced items)"),
         ("data/tables/UniqueStashTypes.json", "unique collection categories"),
         ("data/tables/UniqueStashLayout.json", "unique item names and artwork"),
+        ("data/item-art/index.json", "item pictures on the monitor's forge page"),
         ("data/tables/VillageUniqueDisenchantValues.json", "unique drop weights"),
         ("data/tables/PassiveJewelSlots.json", "ordinary passive tree jewel sockets"),
         ("data/tables/ModType.json", "vendor affix sale-price categories"),
