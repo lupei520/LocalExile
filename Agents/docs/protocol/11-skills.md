@@ -2436,8 +2436,11 @@ buff's `ancestral_buff_cooldown_does_not_tick`.
 
 ## 10g. Totems
 
-A totem skill's ActiveSkills row names its totem (`SkillTotemId`); SkillTotemVariations maps that id and a skin to a
-MonsterVarieties row, and skin 0 is the default (Rejuvenation Totem: 4 → `Metadata/Monsters/Totems/LifeRegenTotem`).
+A skill summons a totem when its ActiveSkills row carries the `SummonsTotem` ActiveSkillType (35 rows; 47 of the
+GrantedEffects rows that reach them are granted by a gem). `SkillTotemId` names the sprite, but it cannot be the
+marker: all 1941 ActiveSkills rows carry one and 1906 share the default 22, which is what a Totem-Support conversion
+would use. SkillTotemVariations maps that id and a skin to a MonsterVarieties row, and skin 0 is the default
+(Rejuvenation Totem: 4 → `Metadata/Monsters/Totems/LifeRegenTotem`; Shockwave Totem: 5 → `EarthquakeTotem`).
 The totem base type (`Metadata/Monsters/Totems/Totem`) reads only components the monster blob writer already has.
 Its .ot files make it immobile with `set_is_totem_object`, play `Emerge` as its basic action, block movement and give
 it `monster_inherent_damage_taken_+%_final` -80.
@@ -2466,14 +2469,22 @@ monster AI, loot, experience and the instance save read only `Monsters`, so none
   gives the living player within the radius the skill's `base_life_regeneration_rate_per_minute` and the row's other
   stats the skill holds, scaled by the player's aura effect.
   The strongest covering totem counts; the player gets buff 172 (0x1c1, source the player) and his stats while it does.
+- Any other totem skill: the totem uses that skill itself. It aims 0x1ab at the nearest living hostile monster within
+  60 cells (our number; `base_totem_range` is not read), naming the granted proxy skill its object carries: the same
+  id a placed trap's proxy uses (0x4000), built from the gem's effect with its stats and area radius, parented to the
+  player and the skill as a trap's is. At the contact, half the use's interval (the skill's `CastTime`, with a 0.3 s
+  floor), it deals the hit captured from the player's stats when the totem was placed to every living hostile monster
+  within the skill's radius of the aimed point, with its ailments, as a trap's or mine's damage does. A monster
+  outside the 60 cells is never aimed at. Its kills give the player their experience but are not his for his on-kill
+  effects.
 - Damage taken from the nearest totem: `damage_removed_from_your_nearest_totem_before_life_or_es_%` (Forest of
   Ancestors, Kaom's Leadership) moves that share of each part of a monster or `/hit` hit, after mitigation and before
   Ward, Energy Shield and Life, to the nearest living totem's Life, capped by its Life (PoB `reducePoolsByDamage`).
   The client never reads that stat, nor `base_presence_radius` (0x3ee0): both are server-side.
 
-Not modelled: the other totem skills (their gem use stays as before: a totem that does not use its skill is not
-placed), monsters attacking totems, placement range (`base_totem_range`), the totem's collision on the server's paths,
-and the totem as the aura buff's source.
+Not modelled: the totem's projectiles (Flame Totem's hit lands at the target, nothing flies), the decoy, devouring and
+summon totems' own mechanics (they place and strike nothing), monsters attacking totems, placement range
+(`base_totem_range`), the totem's collision on the server's paths, and the totem as the aura buff's source.
 
 ## 10h. Player minions that fight
 

@@ -1207,16 +1207,26 @@ This is a research baseline, not new live skill acceptance or complete native/se
   ([11](../docs/protocol/11-skills.md) 13).
 - Summon/mine/trap input and cleanup work; special payloads remain partial ([11](../docs/protocol/11-skills.md) 10h).
 - Hexes/marks have limits and combat effects; reflection and special payloads remain partial (`MonsterCurses`).
-- **Totems (Rejuvenation Totem only).** The gem's use summons its totem after the 0.6 s summon, at the aimed cell:
+- **Totems.** The gem's use summons its totem after the 0.6 s summon, at the aimed cell:
   a team-0 monster object with the variety's minion Life at the gem's level requirement, its duration and the limit
   (1 plus `number_of_additional_totems_allowed`; past it the oldest dies).
+  A totem skill is one whose ActiveSkills row carries the `SummonsTotem` ActiveSkillType, and its `SkillTotemId` names
+  the sprite (it is on every row, so it cannot be the marker); every gem-granted one now places its totem (Shockwave,
+  Flame and Holy Flame, Searing Bond, Siege and Shrapnel Ballista, Ancestral Protector/Warchief/Blademaster, Decoy,
+  Devouring, Rejuvenation). Before, only Rejuvenation Totem was placed; the others fell through to the projectile path.
   Totems live apart from the monsters, so area hits, monster AI, loot and the instance save never see them.
   A totem dies at Life 0, at the end of its duration, when replaced or when the player dies, and leaves a second later.
-  Its aura regenerates the player's Life within its radius, with buff 172.
+  A totem with a skill of its own uses it: it aims 0x1ab at the nearest living hostile monster within 60 cells (our
+  number) and at the contact deals the skill's hit, captured from the player's stats when the totem was placed, to
+  every living hostile monster within the skill's radius of the aimed point, with its ailments; its object carries the
+  granted proxy skill (0x4000, as a placed trap's) so the client can play the action, and its kills count as the
+  player's experience, not his on-kill effects. Rejuvenation Totem's aura regenerates the player's Life within its
+  radius, with buff 172.
   `damage_removed_from_your_nearest_totem_before_life_or_es_%` moves that share of a monster or `/hit` hit, after
   mitigation, to the nearest totem's Life (Forest of Ancestors, Spirit of Kaom); covered by Gateway tests.
-  Not yet: other totem skills (their use places nothing), monsters attacking totems, placement range and server-side
-  totem collision; not yet checked with the real client ([11](../docs/protocol/11-skills.md) §10g).
+  Not yet: the totem's projectiles (a Flame Totem's hit lands at the target, nothing flies), the decoy, devouring and
+  summon totems' own mechanics, monsters attacking totems, placement range and server-side totem collision; whether
+  the client draws a totem's action is not yet checked with the real client ([11](../docs/protocol/11-skills.md) §10g).
 - Passive self buffs (`PassiveBuffAuras`): a passive's BuffTemplates buff on the player adds its stats to the
   passives' sum and is sent with 0x1c1 after an allocation and on area entry, and taken off with 0x1c2 on a refund
   (Surfcaster's Ghost of the Deep).

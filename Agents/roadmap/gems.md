@@ -71,8 +71,9 @@ What is known about the client and the data is in [19](../docs/protocol/19-gems.
   Item-support records, duplicate resolution, rolled levels and Delve more damage have automated coverage.
 - **Next:** implement special execution mechanics separately: triggers, attack repeats (Multistrike), Ice Nova's
   repeated rings and Spell Echo's final-repeat stats (Greater and Awakened Spell Echo), projectile branching,
-  totems that use their skill (only Rejuvenation Totem's aura has an executor, and monsters do not attack totems;
-  [11](../docs/protocol/11-skills.md) §10g), mines, minions, leech and conditional effects; verify each against
+  the totems' remaining halves (their projectiles, the decoy/devouring/summon totems' mechanics, and monsters
+  attacking totems; the totem skills themselves place and strike now, [11](../docs/protocol/11-skills.md) §10g),
+  mines, minions, leech and conditional effects; verify each against
   native data and live behaviour.
   Cyclone's item-granted badge letters/colours and supported panel values were checked with the real client.
   Verify native refresh after mod changes and controlled before/after local level/quality changes.

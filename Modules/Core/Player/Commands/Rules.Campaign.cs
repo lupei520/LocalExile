@@ -223,6 +223,25 @@ static partial class CommandsRules
         }
         state["monsters"] = monsters;
 
+        // The player's totems, deliberately kept apart from the array above and never merged into it: TotemState lives
+        // in ClientState.Totems, not in ClientState.Monsters, so area hits, monster AI, loot, experience and the
+        // instance save do not see a totem — and neither does /mobs. A scenario runner's preflight needs them (was the
+        // totem summoned at all?), which is what this array is for; /totems prints the same facts as text.
+        var totems = new JsonArray();
+        lock (conn.Monsters)
+        {
+            double totemNow = conn.Clock.Elapsed.TotalSeconds;
+            foreach (var totem in conn.Totems.Living(totemNow).OrderBy(t => t.Id))
+                totems.Add(new JsonObject
+                {
+                    ["id"] = totem.Id, ["variety"] = totem.VarietyId, ["row"] = totem.Row, ["level"] = totem.Level,
+                    ["life"] = totem.Life, ["maxLife"] = totem.MaxLife, ["pos"] = Cell(totem.At.X, totem.At.Y),
+                    ["left"] = Math.Round(Math.Max(0, totem.Until - totemNow), 3), ["skill"] = totem.SkillId,
+                    ["skillName"] = Game.TotemSkillLabel(conn, totem.Effect),
+                });
+        }
+        state["totems"] = totems;
+
         var clientFlags = Quests.Names(PlayerQuestFlags(conn));
         var npcs = new JsonArray();
         lock (conn.Npcs)

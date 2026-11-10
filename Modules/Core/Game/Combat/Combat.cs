@@ -926,7 +926,7 @@ static partial class Game
             return await Desecrate(remote, stream, ciphers, conn, skillId, to, Current);
         if (gem.Name is not null && TotemVariety(conn, gem.Effect) is { } totem)
         {
-            _ = PlaceTotem(remote, stream, ciphers, conn, skillId, gem.Effect, gem.Level, totem, to, Current);
+            _ = PlaceTotem(remote, stream, ciphers, conn, skillId, gem.Effect, gem.Level, totem, to);
             return true;
         }
         if (gem.Name is not null && UseWarcryInstance(remote, stream, ciphers, conn, skillId, gem.Effect)) return true;
