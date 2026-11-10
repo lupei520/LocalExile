@@ -726,6 +726,12 @@ sealed class SkillCatalog(string folder = "data", bool hardMode = false)
     // Rolling Magma (once Magma Orb) creates MagmaOrbShort (Frida 2026-11-01, trace-projectile-create.js); without the row every
     // cast was refused while the client drew its orb.
     // Spectral Throw's is ThrownWeapon; without it every use was refused (live 2026-11-02).
+    // Splitting Steel's is ImpactingSteelProjectile: the skill's own row name is gone from 3.29 Projectiles.dat, whose only
+    // steel-family rows are this one, ImpactingSteelProjectileSecondary (its split shards), ShatteringSteelProjectile
+    // (Shattering Steel, still a separate effect and gem) and the Lancing Steel ones. The skill's own art still carries the
+    // name: ActiveSkills splitting_steel (+ its two transfigured variants) draws ImpactingSteelSkill.dds, and the gem's
+    // ItemVisualIdentity SkillGemSplittingSteel is Art/2DItems/Gems/ImpactingSteelGem.dds (the archive has no
+    // SplittingSteel art at all). Without it every use was refused (live 2026-11-09).
     static readonly Dictionary<string, string> ProjectileFallbacks = new()
     {
         ["KineticBlast"] = "Metadata/Projectiles/WandProjectile",
@@ -751,6 +757,7 @@ sealed class SkillCatalog(string folder = "data", bool hardMode = false)
         ["SplitArrowAltX"] = "Metadata/Projectiles/SplitArrowDefault",
         ["SplitArrowAltY"] = "Metadata/Projectiles/SplitArrowDefault",
         ["VaalSplitArrow"] = "Metadata/Projectiles/VaalSplitArrowDefault",
+        ["SplittingSteel"] = "Metadata/Projectiles/ImpactingSteelProjectile",
     };
 
     /// <summary>A Projectiles.dat row by its Id (<c>Metadata/Projectiles/DefaultArrow</c> for a bow's ordinary attack).</summary>
