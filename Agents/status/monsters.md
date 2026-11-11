@@ -200,8 +200,13 @@ Part of [Status](../Status.md); what to build next in this area is in
   `…DualWield`, whose own Ids have no `.ot` and share `LabyrinthBoss` through `BaseMonsterTypeIndex`) have their kits
   too — the swing, the leap slam, Voll's slam or Voll's charge, and the ornaments — but nothing spawns him yet: the
   arena driver (`IzaroFights.cs`, which has the elevator, the doors, the trial's life split and his lines) is not
-  called by anything — and the arena has no furniture to drive: `data/room-points.json` holds no Labyrinth boss room, so
-  `Elevator_Izaro`, its doors and the objective markers are never created (nothing in the data names their cells).
+  called by anything. The arena has its furniture now: `scripts/re/atlas room-points` keeps a room for the Labyrinth's own
+  server objects (`Metadata/Terrain/Labyrinth/Objects/`, `RoomFile.IsLabyrinthObject`, which `IsQuestObject` does not
+  cover), so `data/room-points.json` has the 249 Labyrinth rooms that carry one — the 30 boss rooms among them, with
+  `LabyrinthIzaroArenaDoor`, `LabyrinthBossMarker`, `TeleportMarker` and the pre-fight speech — and `object-types` has
+  `Elevator_Izaro` and `BossObjectiveMarker` (named by the tiles, not by a room, so the manifest asks for them by name).
+  Still missing: the elevator is a tile object (`ServerLevels.Level.TileLabyrinthObjects` collects them and nothing reads
+  it yet) and nothing creates the rooms' objects in a Labyrinth area.
   Not yet: the rows the data leaves unnamed (Dominus' lightning souls,
   Malachai's hearts, his flayed ones and Maligaro's blades), Arakaali's
   laser turret daemons and Abberath's spawner daemons as separate

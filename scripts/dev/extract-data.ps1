@@ -42,11 +42,13 @@ $manifest = @(
        Args = @('run', '--project', 'scripts/re/atlas', '--', 'Client/Content.ggpk', 'delve-paths'); Version = 1; Needs = @('tables')
        UsedBy = 'authored Delve rail nodes, endpoints and room links' }
     @{ Name = 'room-points'; Outputs = @('data\room-points.json'); Runner = 'dotnet'
-       Args = @('run', '--project', 'scripts/re/atlas', '--', 'Client/Content.ggpk', 'room-points'); Version = 9; Needs = @('tables')
+       Args = @('run', '--project', 'scripts/re/atlas', '--', 'Client/Content.ggpk', 'room-points'); Version = 10; Needs = @('tables')
        UsedBy = 'unique bosses and named packs (14-monster-packs.md), quest room objects (12-quests.md)' }
-    # After area-transitions and room-points: --all also takes the object types those files name.
+    # After area-transitions and room-points: --all also takes the object types those files name. The Labyrinth's
+    # elevator and objective marker are named by the arena's tiles, not by a room, so they are asked for by name.
     @{ Name = 'object-types'; Outputs = @('data\object-types.json'); Runner = 'python'
-       Args = @('scripts/re/ot_components.py', '--all', '--json', 'data/object-types.json'); Version = 8; Needs = @('tables', 'area-transitions', 'room-points')
+       Args = @('scripts/re/ot_components.py', '--all', '--json', 'data/object-types.json',
+                'Metadata/Terrain/Labyrinth/Objects/Elevator_Izaro', 'Metadata/Terrain/Labyrinth/Objects/BossObjectiveMarker'); Version = 9; Needs = @('tables', 'area-transitions', 'room-points')
        UsedBy = 'monsters (emergence and inherited Life corpse flags), NPCs, area transitions, quest objects and chests, hideout decorations and stationary collision footprints' }
     @{ Name = 'hideouts'; Outputs = @('data\hideouts.json'); Runner = 'dotnet'
        Args = @('run', '--project', 'scripts/re/atlas', '--', 'Client/Content.ggpk', 'hideouts'); Version = 3; Needs = @('tables', 'object-types')
