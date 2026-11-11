@@ -198,15 +198,18 @@ Part of [Status](../Status.md); what to build next in this area is in
   (AvariusCasticusStatue's TriggerableBlockage, DaressoStatueMaleSword, SkeletonMeleeLightningShavronne), and past
   six live adds a summon raises nothing. Izaro's three weapons (the Labyrinth's `LabyrinthBossMaul`, `…OneHandAndShield`,
   `…DualWield`, whose own Ids have no `.ot` and share `LabyrinthBoss` through `BaseMonsterTypeIndex`) have their kits
-  too — the swing, the leap slam, Voll's slam or Voll's charge, and the ornaments — but nothing spawns him yet: the
-  arena driver (`IzaroFights.cs`, which has the elevator, the doors, the trial's life split and his lines) is not
-  called by anything. The arena has its furniture now: `scripts/re/atlas room-points` keeps a room for the Labyrinth's own
-  server objects (`Metadata/Terrain/Labyrinth/Objects/`, `RoomFile.IsLabyrinthObject`, which `IsQuestObject` does not
-  cover), so `data/room-points.json` has the 249 Labyrinth rooms that carry one — the 30 boss rooms among them, with
-  `LabyrinthIzaroArenaDoor`, `LabyrinthBossMarker`, `TeleportMarker` and the pre-fight speech — and `object-types` has
-  `Elevator_Izaro` and `BossObjectiveMarker` (named by the tiles, not by a room, so the manifest asks for them by name).
-  Still missing: the elevator is a tile object (`ServerLevels.Level.TileLabyrinthObjects` collects them and nothing reads
-  it yet) and nothing creates the rooms' objects in a Labyrinth area.
+  too — the swing, the leap slam, Voll's slam or Voll's charge, and the ornaments — and his arena plays: `/lab_layout 1`
+  lists today's rooms, `/goto 1_Labyrinth_boss_2_end` then a step onto the elevator (live 2026-11-11) rises it, shuts
+  both arena doors, spawns Izaro as a Unique at the trial's start percent (33% of 158722 at level 33, his bar at it),
+  says `Izaro3_Prefight` and fights — three distinct attack windups (1.0 s, 1.4 s, 3.0 s) and area skill 0x4007 at radius
+  45, his four granted rows. One Izaro per arena: entering again removes the one this instance still has (the same run
+  had two of him, both chasing). The arena's furniture comes from `scripts/re/atlas room-points`, which keeps a room for
+  the Labyrinth's own server objects (`Metadata/Terrain/Labyrinth/Objects/`, `RoomFile.IsLabyrinthObject`, which
+  `IsQuestObject` does not cover): `data/room-points.json` has the 249 Labyrinth rooms that carry one — the 30 boss rooms
+  among them, with `LabyrinthIzaroArenaDoor`, `LabyrinthBossMarker`, `TeleportMarker` and the pre-fight speech — and
+  `object-types` has `Elevator_Izaro` and `BossObjectiveMarker` (named by the tiles, not by a room, so the manifest asks
+  for them by name). Not yet: his lines reach nothing without the `LabyrinthSecrets` client table (the servers build it
+  from `sql/`, and the log says it is not in `data/client.db`), and the arena reports no trial objects and no monograph.
   Not yet: the rows the data leaves unnamed (Dominus' lightning souls,
   Malachai's hearts, his flayed ones and Maligaro's blades), Arakaali's
   laser turret daemons and Abberath's spawner daemons as separate
