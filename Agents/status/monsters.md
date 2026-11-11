@@ -200,7 +200,9 @@ Part of [Status](../Status.md); what to build next in this area is in
   `…DualWield`, whose own Ids have no `.ot` and share `LabyrinthBoss` through `BaseMonsterTypeIndex`) have their kits
   too — the swing, the leap slam, Voll's slam or Voll's charge, and the ornaments — but nothing spawns him yet: the
   arena driver (`IzaroFights.cs`, which has the elevator, the doors, the trial's life split and his lines) is not
-  called by anything. Not yet: the rows the data leaves unnamed (Dominus' lightning souls,
+  called by anything — and the arena has no furniture to drive: `data/room-points.json` holds no Labyrinth boss room, so
+  `Elevator_Izaro`, its doors and the objective markers are never created (nothing in the data names their cells).
+  Not yet: the rows the data leaves unnamed (Dominus' lightning souls,
   Malachai's hearts, his flayed ones and Maligaro's blades), Arakaali's
   laser turret daemons and Abberath's spawner daemons as separate
   casters (their beams and fireballs play from the boss's own rows), Garukhan's charged-dash shadow clones, the
