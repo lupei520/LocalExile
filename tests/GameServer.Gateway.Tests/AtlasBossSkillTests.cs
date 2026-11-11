@@ -1,3 +1,5 @@
+using GameServer.Core.World;
+
 namespace GameServer.Gateway.Tests;
 
 // The Atlas pinnacle bosses played one granted effect as a plain swing, because nothing took their kit: their varieties
@@ -59,19 +61,65 @@ public class AtlasBossSkillTests
         var corridor = AtlasBosses.SirusDamage(AtlasBosses.SirusCorridorBlastEffect, 10, 10);
         Assert.Equal(16, corridor.MinTotal);
         Assert.Equal(24, corridor.MaxTotal);
+
+        // The Maven and the Nucleus her death forms are the same kind of fight. Her kit is her own granted effects plus
+        // the beam impact her six invisible laser targets fire (1872): the server spawns no actor for those six, so she
+        // plays their beams herself. The Nucleus' kit is entirely its own.
+        var maven = monsters.Find(Game.MavenNucleus.Maven);
+        var nucleus = monsters.Find(Game.MavenNucleus.Nucleus);
+        Assert.NotNull(maven);
+        Assert.NotNull(nucleus);
+        Assert.True(AtlasBosses.IsMaven(maven));
+        Assert.True(AtlasBosses.IsNucleus(nucleus));
+        Assert.True(AtlasBosses.IsBoss(maven));
+        Assert.True(AtlasBosses.IsBoss(nucleus));
+        Assert.False(AtlasBosses.MeleeLike(maven!));
+        Assert.False(AtlasBosses.MeleeLike(nucleus!));
+        Assert.Equal(AtlasBosses.MavenProjectileEffect, AtlasBosses.BasicEffect(maven!));
+        Assert.Equal(AtlasBosses.NucleusSmallProjectileBarrageEffect, AtlasBosses.BasicEffect(nucleus!));
+        foreach (int effect in AtlasBosses.MavenEffects)
+            if (effect != AtlasBosses.MavenLaserBeamEffect) Assert.Contains(effect, maven!.GrantedEffects!);
+        foreach (int effect in AtlasBosses.NucleusEffects) Assert.Contains(effect, nucleus!.GrantedEffects!);
+
+        // Their rows carry the hit the same way, with the row's own element: her shot is lightning 0.75-2.25 of the
+        // variety's damage and her slam physical 1.6-2.4 converted in thirds (three 100% conversions are capped at 100%
+        // by the game's conversion table, so fire, cold and lightning keep a third each and 1% stays physical).
+        var shot = AtlasBosses.MavenDamage(AtlasBosses.MavenProjectileEffect, 100, 100);
+        Assert.Equal(75, shot[DamageType.Lightning].Min);
+        Assert.Equal(225, shot[DamageType.Lightning].Max);
+        Assert.True(shot[DamageType.Physical].IsZero);
+        var slam = AtlasBosses.MavenDamage(AtlasBosses.MavenCircleSlamEffect, 100, 100);
+        Assert.Equal(52, slam[DamageType.Fire].Min);
+        Assert.Equal(80, slam[DamageType.Fire].Max);
+        Assert.Equal(52, slam[DamageType.Cold].Min);
+        Assert.Equal(52, slam[DamageType.Lightning].Min);
+        // The Nucleus' ion cannon is lightning and cold at once, and the super fire projectile's own row (a launcher
+        // that resolves to a single point of damage) lands nothing while the impact it leaves does.
+        var ion = AtlasBosses.MavenDamage(AtlasBosses.NucleusIonCannonEffect, 100, 100);
+        Assert.Equal(40, ion[DamageType.Lightning].Min);
+        Assert.Equal(60, ion[DamageType.Cold].Max);
+        Assert.True(AtlasBosses.MavenDamage(AtlasBosses.MavenSuperFireProjectileEffect, 100, 100).IsZero);
+        Assert.Equal(240, AtlasBosses.MavenDamage(AtlasBosses.MavenSuperFireProjectileImpactEffect, 100, 100)
+            [DamageType.Fire].Max);
+        // An action-script clip carries no damage of its own: playing it can only ever be the animation.
+        Assert.True(AtlasBosses.MavenDamage(AtlasBosses.MavenEASCircleSlamEffect, 100, 100).IsZero);
     }
 
     [Fact]
-    public void The_three_bosses_never_share_a_skill_id_and_none_is_a_gem_id()
+    public void The_bosses_never_share_a_skill_id_and_none_is_a_gem_id()
     {
         var monsters = new MonsterCatalog();
         var shaper = monsters.Find(AtlasBosses.Shaper)!;
         var elder = monsters.Find(AtlasBosses.Elder)!;
         var sirus = monsters.Find(AtlasBosses.Sirus)!;
+        var maven = monsters.Find(Game.MavenNucleus.Maven)!;
+        var nucleus = monsters.Find(Game.MavenNucleus.Nucleus)!;
         var ids = new List<ushort>();
         foreach (int effect in AtlasBosses.ShaperEffects) ids.Add(AtlasBosses.Skill(shaper, effect));
         foreach (int effect in AtlasBosses.ElderEffects) ids.Add(AtlasBosses.Skill(elder, effect));
         foreach (int effect in AtlasBosses.SirusEffects) ids.Add(AtlasBosses.Skill(sirus, effect));
+        foreach (int effect in AtlasBosses.MavenEffects) ids.Add(AtlasBosses.Skill(maven, effect));
+        foreach (int effect in AtlasBosses.NucleusEffects) ids.Add(AtlasBosses.Skill(nucleus, effect));
 
         // A gem id here makes the client start that gem's action instead of the boss's clip (0xc0000005, live 2026-10-31).
         foreach (ushort id in ids)
@@ -80,7 +128,10 @@ public class AtlasBossSkillTests
             Assert.False(id is >= 0x0103 and <= 0x0142, $"skill id 0x{id:x4} is a gem id");
         }
         Assert.Equal(ids.Count, ids.Distinct().Count());
-        // The families are what keeps them apart: the Shaper and the Elder stand in one arena together.
-        Assert.All(AtlasBosses.SirusEffects, e => Assert.InRange(AtlasBosses.Skill(sirus, e), 0x4020, 0x403f));
+        // The families are what keeps them apart: the Shaper and the Elder stand in one arena together, and The Maven
+        // and her Nucleus are one encounter.
+        Assert.All(AtlasBosses.SirusEffects, e => Assert.InRange(AtlasBosses.Skill(sirus, e), 0x4020, 0x402f));
+        Assert.All(AtlasBosses.MavenEffects, e => Assert.InRange(AtlasBosses.Skill(maven, e), 0x4030, 0x403f));
+        Assert.All(AtlasBosses.NucleusEffects, e => Assert.InRange(AtlasBosses.Skill(nucleus, e), 0x4040, 0x404f));
     }
 }
