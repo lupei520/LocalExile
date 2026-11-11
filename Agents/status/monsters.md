@@ -116,6 +116,70 @@ Part of [Status](../Status.md); what to build next in this area is in
   He swings `DominusLightningSlam` (bond, mark and souls effects are skipped); a far boss is created asleep and
   woken when the player comes near. Code: `MavenNucleus.CombatEffect`, `SpawnMonster`.
   Docs: [11](../docs/protocol/11-skills.md) §6.
+- The campaign's scripted bosses (the Pantheon's twelve: Tukohama, Abberath and his enraged form, Ryslatha, Greust,
+  Gruthkul, Arakaali, Yugul, Solaris and Lunaris, Shakari and her second form, Garukhan; and the acts' bosses: Brutus,
+  Merveil and her twisted form, The Weaver, Piety, Dominus and his ascendant, Kaom, Daresso, Piety the Abomination,
+  Malachai and his second stage, Avarius and his reassembled form, Kitava in both fights, Shavronne and the reassembled
+  Brutus, Maligaro, General Adus, Vilenta) fight with their own kits instead of one plain
+  swing, after the Atlas bosses' pattern (the Brine King already had his own controller). All are scripted (the
+  ordinary AI skips them), own their whole `GrantedEffectsKeys` list on the actor under ids 0x4030 + the index in
+  the kit — never a gem id — and rotate it from one controller per monster: the melee keeps the variety's own
+  attack time and reach, every other skill of the kit is a slam, a hook or a projectile row and lands in its own
+  reach rather than on the one player the boss faced, so the slams (Tukohama's totem slam, Abberath's meteor
+  upheaval, Gruthkul's upheaval, Shakari's
+  tail strike, Garukhan's combo, Yugul's chomp, the Leap Slams) hit harder than the plain swing at their clip's cast
+  time, a marker row (a hide, a burrow, a dodge, a spawner trigger, Solaris' and Lunaris' transform) carries no hit,
+  and each skill's ground art was checked against the client's metadata. The monsters the fights raise are real
+  varieties, spawned owned by the boss and retired with it: Tukohama stands behind his own `TukohamaShieldTotem`
+  (cannot be damaged while it lives, and killing or outlasting it is what exposes him), Arakaali's egg mortars land
+  `SpiderlingEggArakaali` eggs that hatch `SpiderArakaaliHatch` broodlings when their time comes or when the player
+  breaks them (her own 7799 names no summon row, so the controller hatches them), and Garukhan's cascade raises
+  `GarukhanMinionSmall` warriors from the sand. Shakari burrows, blinks to the player and emerges with a tail sweep;
+  Ryslatha slides away from the player before spitting again; Arakaali (MovementSpeed 0) fights from her web.
+  The bosses that warp move themselves instead of having a hit played: Merveil, Dominus' death teleport and
+  Shavronne blink away from the player, Piety's Lightning Warp and Malachai's teleport land on it, and the Weaver's
+  hide repositions it (only Shakari's emerge keeps its tail sweep).
+  There is no life gate: a campaign boss does not stop taking damage at a threshold, and the two-variety
+  phases the data describes (Abberath 6008 then 6012, Shakari 6275 then 6278) are a second monster in a second room
+  that `WorldAreas` already places, so each kit's gate is created empty (`LifePhaseGate` with no thresholds never
+  arms, and `Step` still has one to read); Tukohama's shield is his own totem's. All twelve were played live
+  (2026-11-11, `/goto` each area and stand beside the boss): each wakes, deals damage and cycles three to six windups
+  plus its slams — except Solaris and Lunaris, whom the Harbour Bridge leaves out of its population until the two orbs
+  are handed to `GoddessFightStarter` (`On.UsedWith` then `On.Spawns`); `/spawn_mob` them and they fight like the rest.
+  A boss does nothing while the player stands inside it (the teleport dev command does that), so a check has to stand
+  eight to ten cells off. A later form the data does not place
+  is the quest engine's: Merveil's `BossMerveil2`, Dominus' `Dominusdemon` and Malachai's `MalachaiBoss2` appear
+  where the first one falls (`QuestEngine` SecondForm), and each gets its own controller from this same table. Damage
+  comes from each effect's own stat set at the area's level (the variety's physical damage when the stat set names
+  none, scaled for the slams). The acts' summon rows raise their monsters too, owned by the boss and retired with
+  it: Avarius (and Innocence) raises Guardians of Eternity, Kaom his archer daemon, Piety her blood elementals, Piety
+  the Abomination her eye, Shavronne her lightning skeletons and Daresso his arena statues — each a variety the blob
+  can serialize, standing in where the row's real monster carries a component the write cannot
+  (AvariusCasticusStatue's TriggerableBlockage, DaressoStatueMaleSword, SkeletonMeleeLightningShavronne), and past
+  six live adds a summon raises nothing. Izaro's three weapons (the Labyrinth's `LabyrinthBossMaul`, `…OneHandAndShield`,
+  `…DualWield`, whose own Ids have no `.ot` and share `LabyrinthBoss` through `BaseMonsterTypeIndex`) have their kits
+  too — the swing, the leap slam, Voll's slam or Voll's charge, and the ornaments — and his arena plays: `/lab_layout 1`
+  lists today's rooms, `/goto 1_Labyrinth_boss_2_end` then a step onto the elevator (live 2026-11-11) rises it, shuts
+  both arena doors, spawns Izaro as a Unique at the trial's start percent (33% of 158722 at level 33, his bar at it),
+  says `Izaro3_Prefight` and fights — three distinct attack windups (1.0 s, 1.4 s, 3.0 s) and area skill 0x4007 at radius
+  45, his four granted rows. One Izaro per arena: entering again removes the one this instance still has (the same run
+  had two of him, both chasing). The arena's furniture comes from `scripts/re/atlas room-points`, which keeps a room for
+  the Labyrinth's own server objects (`Metadata/Terrain/Labyrinth/Objects/`, `RoomFile.IsLabyrinthObject`, which
+  `IsQuestObject` does not cover): `data/room-points.json` has the 249 Labyrinth rooms that carry one — the 30 boss rooms
+  among them, with `LabyrinthIzaroArenaDoor`, `LabyrinthBossMarker`, `TeleportMarker` and the pre-fight speech — and
+  `object-types` has `Elevator_Izaro` and `BossObjectiveMarker` (named by the tiles, not by a room, so the manifest asks
+  for them by name). Not yet: his lines reach nothing without the `LabyrinthSecrets` client table (the servers build it
+  from `sql/`, and the log says it is not in `data/client.db`), and the arena reports no trial objects and no monograph.
+  Not yet: the rows the data leaves unnamed (Dominus' lightning souls,
+  Malachai's hearts, his flayed ones and Maligaro's blades), Arakaali's
+  laser turret daemons and Abberath's spawner daemons as separate
+  casters (their beams and fireballs play from the boss's own rows), Garukhan's charged-dash shadow clones, the
+  Tukohama map variants' extra rows (3561/3562), and the arena controllers' own objects (`RyslathaFightManager`'s
+  parasite nests, Garukhan's `SpawnerController`, Arakaali's turret spawners). Checked by the build, the three suites
+  and the data (every raised variety resolves and is Supported, and every act kit is built out of that variety's own
+  rows); not yet with the client. Code:
+  `Modules/Core/Game/Monster/CampaignBosses.cs` (wired in `Monsters.cs` and `GameModule.cs`), over
+  `AtlasBossFight.cs`. Tests: `PantheonBossSkillTests.cs`.
 
 ## Partly working
 
