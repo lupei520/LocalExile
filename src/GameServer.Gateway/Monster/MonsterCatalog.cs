@@ -82,7 +82,10 @@ public sealed class MonsterCatalog(string folder = "data")
     static Dictionary<string, int?>? LoadCorpse(string folder)
     {
         string path = Path.Combine(folder, "monster-takehit.json");
-        if (!File.Exists(path)) return null;
+        // The file is generated data the server reads from client.db as well as from disk (ClientTables), like its
+        // sibling above: a server that keeps its game data in the database has no monster-takehit.json on disk, and
+        // every corpse would then block its paths for 150 ms whatever the variety's own death clip says.
+        if (!ClientTables.Exists(path)) return null;
         using var doc = GameTables.Open(path);
         Dictionary<string, int?>? result = null;
         foreach (var p in doc.RootElement.EnumerateObject())
