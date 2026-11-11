@@ -5,7 +5,7 @@ using GameServer.Core;
 /// feature turns itself off without its file; this lists the missing ones in
 /// one startup warning. Keep in step with extract-data.ps1's manifest.
 /// </summary>
-static class GameDataFiles
+public static class GameDataFiles
 {
     public static readonly (string File, string Feature)[] All =
     [
@@ -30,6 +30,7 @@ static class GameDataFiles
         ("data/tables/DelveUpgrades.json", "Delve equipment upgrade prices, limits and stats"),
         ("data/delve-paths.json", "authored Delve rail routes"),
         ("data/tables/DelveLevelScaling.json", "Delve trip costs and monster levels"),
+        ("data/tables/DelveResourcePerLevel.json", "sulphite deposits' native area-level rewards"),
         ("data/tables/DelveFlares.json", "Delve flare prices"),
         ("data/tables/DelveDynamite.json", "Delve dynamite prices"),
         ("data/tables/UniqueMaps.json", "unique map shop identities"),
@@ -47,7 +48,9 @@ static class GameDataFiles
         ("data/tables/ItemVisualIdentity.json", "unique map artwork"),
         // object-types manifest v4 combines inherited Life flags with Positioned/Animated collision metadata; v6 adds the
         // rooms' server objects (room-points.json) and the quest tile and room objects (ot_components.py QUEST_TILE_TYPES,
-        // QUEST_ROOM_TYPES). item-types v2: the quest items' .it Quest flags.
+        // QUEST_ROOM_TYPES); v10 adds the Labyrinth's elevator and objective marker (asked for by name in the Args) and the
+        // monster types that phase through objects or never walk (upstream's ot_components.py "phases"/"immobile").
+        // item-types v2: the quest items' .it Quest flags.
         ("data/object-types.json", "monsters (emergence and inherited Life corpse flags), NPCs, area transitions, quest objects and chests, stationary collision footprints"),
         ("data/item-types.json", "items, quest items' Quest flags"),
         ("data/area-transitions.json", "area transitions of fixed layouts"),
@@ -73,9 +76,10 @@ static class GameDataFiles
         ("tables", 4, "Kirac progression, gold refresh prices and native trap identities"),
         ("vendor-stock", 2, "vendor-specific quest/class gem membership and captured layout groups"),
         ("item-types", 2, "quest items' .it Quest flags (held, picked up, handed in, used): without them quest items set no flags"),
-        ("animation-contacts", 4, "class rig animation indices for 0x1b2 cast clips: without them run casts have no character animation"),
+        ("animation-contacts", 7, "class rig animation indices and spell cancellation events: without them cast movement waits for the full spell"),
         ("monster-contacts", 4, "Throw-stage animation contacts: without them boss stage effects wait until recovery ends"),
-        ("object-types", 9, "quest objects and chests (rooms' server objects, quest tile and room types, the Labyrinth's portals, its arena doors, elevator and objective marker): without them they get the wrong blob or none"),
+        ("monster-takehit", 5, "death clips' body-clear times: without them a lockstep client's corpses block paths for 150 ms whatever the monster"),
+        ("object-types", 10, "quest objects and chests (rooms' server objects, quest tile and room types, the Labyrinth's portals, its arena doors, elevator and objective marker) and the monster types that phase through objects or never walk: without them they get the wrong blob or none, phasing monsters block paths and immobile ones are walked"),
     ];
 
     /// <summary>The <see cref="Needed"/> entries data/extract-stamps.json (written by extract-data.ps1) records at an older

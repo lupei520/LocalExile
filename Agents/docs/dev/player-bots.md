@@ -1,6 +1,6 @@
 # Player bots (the PlayerBots module)
 
-`Modules/PlayerBots/` makes a new server look lived in: server-driven characters that are created over time, play
+`Modules/Custom/PlayerBots/` makes a new server look lived in: server-driven characters that are created over time, play
 through the campaign, visit the towns and leave again. Off by default: no league lists it.
 
 ## Turning it on
@@ -64,4 +64,4 @@ Trading, chat and advanced tactical/ascendancy builds remain open. Current imple
 
 The optional authenticated MCP endpoint exposes per-bot observations, leased tactical orders, a test-target spawn and
 the bot's damage ledger, so an external AI can run a mechanics experiment against a party bot.
-See [connection, tools and fallback rules](../../../Modules/PlayerBots/MCP.md).
+See [connection, tools and fallback rules](../../../Modules/Custom/PlayerBots/MCP.md).

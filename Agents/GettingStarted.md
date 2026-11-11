@@ -352,10 +352,14 @@ client shares.
 
 **League modes:** the existing creation screen's Hardcore, SSF and Ruthless choices select server rules.
 Selected modes change server rules; Hardcore Ruthless death is permanent.
-Ruthless balance can be edited in `Modules/Ruthless/ruthless.json` without rebuilding or restarting the server.
-To create a missing local copy and edit it, run from the repository root:
+Ruthless balance is the Ruthless module's settings, changed without rebuilding or restarting the server: write the numbers
+you change in `data/modules/Ruthless.json` (the defaults are in `Modules/Core/Ruthless/settings.json`). It can also be
+edited in a local tuning file of the numbers alone, `Modules/Ruthless/ruthless.json` (point `Game_RUTHLESS_RULES` at it),
+without rebuilding or restarting the server. To create a missing local copy and edit it, run from the repository root:
 
 ```powershell
+New-Item -ItemType Directory -Force data\modules | Out-Null
+notepad .\data\modules\Ruthless.json
 notepad .\Modules\Ruthless\ruthless.json
 ```
 

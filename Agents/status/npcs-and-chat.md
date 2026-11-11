@@ -14,7 +14,7 @@ Part of [Status](../Status.md); what to build next in this area is in
   Docs: [10](../docs/protocol/10-chat-and-commands.md).
 - Chat lines and channels (the `Chat` module): local lines go to the players of the instance, `#` global, `$` trade and
   `@Name` whispers go through a chat server, so players of separate Gateways can talk.
-  Each Gateway runs a local chat server; a mod (`UseChatServer`: `globalchat` in LocalExile-Mods) moves its players to another server, and
+  Each Gateway runs a local chat server; a mod (`ChatRoutes.Use`: `globalchat` in LocalExile-Mods) moves its players to another server, and
   disabling the mod moves them back. When that server fails a player is told in chat and stays local, trying again at an area change a minute later.
   `src/GameServer.Chat` is the server to host; it stores nothing.
   An item linked with Ctrl+Alt+click from an inventory or the stash shows as a link in the line (C→S 0x12, S→C 0x17).
@@ -124,6 +124,7 @@ Part of [Status](../Status.md); what to build next in this area is in
   skills and its target by name, and read back what each hit did (`read_damage`, the combat lab's ledger), verified live
   2026-11-09: claim → `observe_bot` → `command_bot` `Cleave` at a spawned `Rhoa Mare@20` reached state `issued`, the
   target's life went 119 → 102, and the ledger held exactly that one 17-damage hit.
+  Optional [MCP control](../../Modules/Custom/PlayerBots/MCP.md) exposes per-bot leases, observations and native tactical orders with ordinary following/fallback.
   Party state survives module reload while the leader remains online. Offscreen quests remain simulated;
   trade, chat, ascendancy builds and advanced tactical AI remain open.
   See [player bots](../docs/dev/player-bots.md).

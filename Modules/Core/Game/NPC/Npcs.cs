@@ -2,10 +2,10 @@ using System.Net.Sockets;
 using GameServer.Core.Protocol.Instance;
 using GameServer.Core.Protocol.Login;
 
-static partial class Game
+public static partial class Game
 {
     // Creates one NPC (0x2bb, its NPCs.dat Id is an .ot type) and puts it in the wake zone; kept for clicks and /npcs.
-    internal static async Task<uint> SpawnNpc(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, NpcCatalog.Npc npc,
+    public static async Task<uint> SpawnNpc(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, NpcCatalog.Npc npc,
         int x, int y, float rotation)
     {
         uint id = conn.NextObjectId++;
@@ -14,9 +14,9 @@ static partial class Game
         var hideout = HideoutCatalog.ByArea(conn.Layout.Hash) is not null ? npc.Hideout : null;
         var obj = new NpcObject(x, y, npc.Components!, rotation, npc.StateMachine, npc.TransitionState, npc.Model, npc.Height, hideout);
         uint type = InstanceEntities.ObjectTypeHash(npc.Id);
-        await Send(remote, stream, ciphers, InstanceEntities.CreateObject(id, type, obj.Blob()),
+        await SendWorldCreate(remote, stream, ciphers, conn, id, InstanceEntities.CreateObject(id, type, obj.Blob()),
             $"0x02bb create npc 0x{id:x} {npc} type=0x{type:x8} at ({x}, {y}) rotation {rotation:0.##}, components {string.Join(", ", npc.Components!)}");
-        await Send(remote, stream, ciphers, InstanceProtocol.EnterWakeZone(id), $"0x01a9 npc 0x{id:x} enters wake zone");
+        await SendWorldRecord(remote, stream, ciphers, conn, id, InstanceProtocol.EnterWakeZone(id), $"0x01a9 npc 0x{id:x} enters wake zone");
         lock (conn.Npcs) conn.Npcs[id] = new SpawnedNpc(npc, x, y);
         await RegisterStationaryCollision(remote, stream, ciphers, conn, id, npc.Id, x, y, rotation,
             HideoutCatalog.ByArea(conn.Layout.Hash) is not null ? "npc:" + npc.Id : null, npc.Model);
@@ -24,7 +24,7 @@ static partial class Game
     }
 
     // The town's NPCs (NpcCatalog.In) at their cells.
-    internal static async Task SpawnTownNpcs(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    public static async Task SpawnTownNpcs(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         var notes = new List<string>();
         var placements = HideoutFurniture(conn)?.Npcs ?? NpcCatalog.In(conn.Layout.Hash, conn.Seed, notes);
@@ -47,7 +47,7 @@ static partial class Game
     }
 
     // A click on an NPC (C→S 0x24 on its object): the client walks to it first; follow it and answer once the player is there.
-    internal static async Task TalkToNpc(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    public static async Task TalkToNpc(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, SpawnedNpc npc, double requestedAt)
     {
         if (!TryBeginObjectWalk(conn, requestedAt, npc.X, npc.Y, Math.Max(0, StationaryCollision.Resolve(npc.Npc.Id, npc.Npc.Model).Size), out var objectWalk)) return;
@@ -65,7 +65,7 @@ static partial class Game
             }
             await GainFlaskCharges(remote, stream, ciphers, conn, int.MaxValue, "vendor refill");
             PersistVitals(conn);
-            await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(PlayerId, conn.PlayerLife, conn.PlayerReservedLife), "vendor restores life");
+            await SendWorldRecord(remote, stream, ciphers, conn, PlayerId, InstanceProtocol.LifeUpdate(PlayerId, conn.PlayerLife, conn.PlayerReservedLife), "vendor restores life");
             await SendPlayerMana(remote, stream, ciphers, conn, "vendor restores mana");
         }
         uint id;
@@ -78,7 +78,7 @@ static partial class Game
         // Ctrl + click goes straight to an NPC's Currency Exchange (Faustus), as picking the option does. An NPC without one, or a
         // league without the module, talks as usual.
         if (use.Ctrl && Npcs.Value.TalksOf(npc.Npc).FirstOrDefault(t => t.Category == "CurrencyExchange" && t.Available(Quests.Names(PlayerQuestFlags(conn)))) is { } exchange
-            && await Program.ServerHooks.RunNpcOption(new(PlayerOf(conn), npc.Npc.Name, exchange.Category, exchange.Option, exchange.Script, exchange.TextAudio.Count > 0,
+            && await GameEvents.AnyNpcOption(new(conn, npc.Npc.Name, exchange.Category, exchange.Option, exchange.Script, exchange.TextAudio.Count > 0,
                 exchange.Index, exchange.Row, exchange.OpensGuildHideouts, exchange.RewardOffer))) return;
         if (await GameEvents.AnyNpcTalk(conn, id, npc)) return;
         if (await ContinueQuestConversation(remote, stream, ciphers, conn, id)) return;
@@ -89,7 +89,7 @@ static partial class Game
     // C→S 0x85: the dialogue window was closed or, while a talk plays, Continue was pressed. The client stays in its dialogue
     // state (and the player cannot move) until the server answers: back to the option list (0x84 0xff) after a talk, else
     // 0x84 with object 0, which ends the dialogue.
-    internal static async Task CloseNpcDialogue(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    public static async Task CloseNpcDialogue(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         if (await GameEvents.AnyRewardClosing(conn)) return;
         await GameEvents.RunNpcDialogueClosing(conn);
@@ -127,7 +127,7 @@ static partial class Game
         }
     }
 
-    internal static async Task<bool> ContinueQuestConversation(string remote, NetworkStream stream, ConnectionCiphers ciphers,
+    public static async Task<bool> ContinueQuestConversation(string remote, NetworkStream stream, ConnectionCiphers ciphers,
         ClientState conn, uint id)
     {
         SpawnedNpc? npc;
@@ -141,7 +141,7 @@ static partial class Game
     }
 
     // C→S 0x82: an option picked in the NPC dialogue window (an NPCTalk row of the NPC talked to).
-    internal static async Task ChooseNpcOption(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, byte index)
+    public static async Task ChooseNpcOption(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, byte index)
     {
         uint id = conn.TalkingTo;
         SpawnedNpc? npc;
@@ -155,7 +155,7 @@ static partial class Game
         await ExecuteQuestConversation(remote, stream, ciphers, conn, id, npc, talk);
     }
 
-    internal static async Task ExecuteQuestConversation(string remote, NetworkStream stream, ConnectionCiphers ciphers,
+    public static async Task ExecuteQuestConversation(string remote, NetworkStream stream, ConnectionCiphers ciphers,
         ClientState conn, uint id, SpawnedNpc npc, NpcCatalog.Talk talk)
     {
         if (!talk.Available(Quests.Names(PlayerQuestFlags(conn)))) return;
@@ -165,6 +165,9 @@ static partial class Game
         await ApplyQuestConversationStart(remote, stream, ciphers, conn, id, npc, talk, applyRowRules: true);
         conn.NpcFinishFlag = talk.FinishFlag;
         conn.NpcTalkScript = null;
+        var option = new NpcOption(conn, npc.Npc.Name, talk.Category, talk.Option,
+            talk.Script, talk.TextAudio.Count > 0, talk.Index, talk.Row, talk.OpensGuildHideouts, talk.RewardOffer);
+        bool offeredScript = false;
         // A scripted row's end (FinishNPCChat, DoNPCChat, a screen, a move): after its talk, or now when it has none.
         if (EndsWithScript(talk) && talk.Category is "Gossip" or "Quests" or "QuestReward" && talk.RewardOffer is null)
         {
@@ -172,17 +175,20 @@ static partial class Game
             else
             {
                 if (conn.NpcFinishFlag is { } finish) { conn.NpcFinishFlag = null; await SetQuestFlags(remote, stream, ciphers, conn, [finish]); }
+                // Let the owning module execute its no-audio script before generic FinishNPCChat consumes it.
+                offeredScript = true;
+                if (await GameEvents.AnyNpcOption(option)) return;
                 if (await EndTalkScript(remote, stream, ciphers, conn, id, npc, talk)) return;
             }
         }
         // What an option does is a module's (Modules/Core/npcdialogue); one nothing answers does nothing.
-        if (!await Program.ServerHooks.RunNpcOption(new(PlayerOf(conn), npc.Npc.Name, talk.Category, talk.Option, talk.Script, talk.TextAudio.Count > 0,
+        if (offeredScript || !await GameEvents.AnyNpcOption(new(conn, npc.Npc.Name, talk.Category, talk.Option, talk.Script, talk.TextAudio.Count > 0,
                 talk.Index, talk.Row, talk.OpensGuildHideouts, talk.RewardOffer)))
             Console.WriteLine($"[gateway] {remote} npc option category {talk.Category}: no module answers it");
     }
 
     // A quest's reward window (0xc0 and 0x87). False when the offer has nothing for this character, or was taken.
-    internal static async Task<bool> OfferNpcReward(ClientState conn, int offer)
+    public static async Task<bool> OfferNpcReward(ClientState conn, int offer)
     {
         var (remote, stream, ciphers) = conn.Wire;
         var rewardCatalog = QuestRewardCatalog.Load(hardMode: LeagueFor(conn).HardMode, supportGems: LeagueFor(conn).Rules.SupportGemRewards);
@@ -215,7 +221,7 @@ static partial class Game
 
     // An NPC's Identify Items: the main inventory's unidentified items become identified (their explicit mods and rare names
     // are sent from now on). Removing and adding the same ids in one 0xbf replaces them on the client (see UseItemOn).
-    internal static async Task IdentifyInventory(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, SpawnedNpc npc)
+    public static async Task IdentifyInventory(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, SpawnedNpc npc)
     {
         const byte row = PlayerInventories.MainInventory;
         var items = ItemsOf(conn);
@@ -241,7 +247,7 @@ static partial class Game
 
     // What a price took from the stash (ItemMoves.Price.Stash), to the client: one 0xbf per tab this connection has the
     // contents of (the others come whole when it asks, 0xc7).
-    internal static async Task SendStashPayment(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, AccountStash stash, AccountStash.Payment? paid)
+    public static async Task SendStashPayment(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, AccountStash stash, AccountStash.Payment? paid)
     {
         foreach (var (tab, (removed, changed)) in paid?.Tabs ?? new Dictionary<int, (List<uint>, List<InventoryItem>)>())
             if (TabsSentOf(conn, stash).Contains(tab))

@@ -8,7 +8,7 @@ using GameServer.Core;
 /// may hold when Activate (C→S 0x00d8) is pressed, which area a map opens (Maps.dat <c>Regular_WorldAreasKey</c>), and
 /// each character's open map: its area, its instance once someone entered it, and the portals left.
 /// </summary>
-sealed class MapDevice
+public sealed class MapDevice
 {
     /// <summary>Portals one activation opens; each takes one player into the map once.</summary>
     public const int PortalCount = 6;
@@ -250,6 +250,11 @@ sealed class MapDevice
     /// <summary>The character's open map when they are in that area.</summary>
     public static OpenMap? Current(string character, ushort areaHash) =>
         OpenOf(character) is { } open && open.Area.Hash16 == areaHash ? open : null;
+
+    /// <summary>The map owner and run for this exact instance, including guests after its owner leaves.</summary>
+    public static (string Owner, OpenMap Map)? InInstance(ushort areaHash, ulong instance) =>
+        Open.Where(p => p.Value.Area.Hash16 == areaHash && p.Value.Instance == instance && instance != 0)
+            .Select(p => ((string Owner, OpenMap Map)?)(p.Key, p.Value)).FirstOrDefault();
 
     /// <summary>Takes the portal at place <paramref name="index"/> of the character's open map, so it does not come back.
     /// Returns the map as it was (its instance to enter, 0 for a new one) and how many portals are left, or null when no

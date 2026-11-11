@@ -5,7 +5,7 @@ using GameServer.Storage;
 /// Numeric server settings by key: world.db's <c>system_settings</c> rows, read at startup and on <c>/reload</c>. A key
 /// with no row reads 0. Every row is checked on load; a bad value keeps the previous settings.
 /// </summary>
-sealed class SystemSettings
+public sealed class SystemSettings
 {
     /// <summary>The settings at their defaults. The rows themselves live in world.db's <c>system_settings</c>
     /// (sql/base/world/system_settings.sql); this is the same list, so the monitor can show a key's default

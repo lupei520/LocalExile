@@ -148,6 +148,7 @@ static async Task Serve(LoginServerKeys keys)
         Fixed = fixedSeed,
     };
     using var progress = new SaveDatabase(SaveDatabase.DefaultPath);
+    var characterListClass = new CharacterListClass(progress);
     var registry = new GameServer.Core.World.InstanceRegistry
     {
         SeedFor = seeds.For,
@@ -163,7 +164,7 @@ static async Task Serve(LoginServerKeys keys)
     while (true)
     {
         var tcp = await listener.AcceptTcpClientAsync();
-        _ = Task.Run(() => HandleConnection(tcp, keys, accounts, keyring, directory));
+        _ = Task.Run(() => HandleConnection(tcp, keys, accounts, keyring, directory, characterListClass));
     }
 }
 
@@ -191,7 +192,7 @@ static T Isolated<T>(Func<T> load)
     return result;
 }
 
-static async Task HandleConnection(TcpClient tcp, LoginServerKeys keys, AccountService accounts, InstanceKeyring keyring, InstanceDirectory directory)
+static async Task HandleConnection(TcpClient tcp, LoginServerKeys keys, AccountService accounts, InstanceKeyring keyring, InstanceDirectory directory, CharacterListClass characterListClass)
 {
     string peer = tcp.Client.RemoteEndPoint?.ToString() ?? "?";
     Console.WriteLine($"[auth] {peer} connected");
@@ -226,6 +227,7 @@ static async Task HandleConnection(TcpClient tcp, LoginServerKeys keys, AccountS
             bool local = IsLocal(peer);
             var session = new LoginServerSession(accounts)
             {
+                CharacterListClass = characterListClass.For,
                 InstanceHost = local ? "127.0.0.1" : GatewayEndpoint.Host,
                 InstancePort = local ? GatewayEndpoint.Port : GatewayEndpoint.PublicPort,
                 Keyring = keyring,

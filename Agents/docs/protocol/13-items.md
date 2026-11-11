@@ -58,6 +58,7 @@ Item component vtables (slot 4 write / slot 5 read). The ones with a bare `ret` 
 | Stack | `0x14363f6e8` | `0x1423fb5f0` | u16 stack size (§4a) |
 | SkillGem | `0x143641ec0` | `0x1424755d0` | i32 experience (-1: one level over the cap), u32 +0x3c the variant, u8 +0x10 flags (bit 2: level locked), u16 +0x40 |
 | Sockets | `0x1435ea420` | `0x1421e9790` | u8 = bit0/bit1 (special: nothing more) \| socket count << 2 \| link group count << 5; per socket u8 colour << 1 \| has gem, then the gem's item data **without** the length prefix; then a u8 per link group (its socket count). Colours: 1 red, 2 green, 3 blue, 4 white (all seen live 2026-10-26) |
+| Transformed | — | — | original item's unframed payload; u32 hash 0 represents an omitted original |
 | Armour | `0x143645930` | `0x1424b6a90` | u8 shared roll 0..31 (stored at +0x28); 32 (0x20) is a special minimum-base flag, which also sets +0x2a |
 | MapKey | `0x1436457f8` | `0x1424b5290` | u8 flags: bit0 → u32, bit1 → u16, bit2 → u8; zeros carry no override, so a generic `MapKeyTierN` base supplies its tier |
 | LocalStats, AttributeRequirements, Weapon, Usable, Flask, Quest, Shield, RenderItem | `0x143645740`, `0x1435ea600` … | `ret` | nothing |
@@ -164,6 +165,21 @@ A list is u8 count + mods. A mod (`0x142436e50`): **u16 Mods.dat HASH16**, then 
 empty one; no Mods.dat row has a gap), so the count must match. An unknown hash throws "Deserialised a mod that we don't
 recognise". After reading, `0x142205d50` adds the "magic" / "rare" tag and gives each list to `0x142206280` with its
 kind (implicit 1, explicit 2, enchant 3, scourge and hidden without one).
+
+Indexed descriptions, cases `0x27`, `0x28`, `0x3a`, look up the stat value by
+`Index` in `IndexableSupportGems`, `IndexableNonActiveSupportGems`, `IndexableSkillGems`, respectively.
+These are not row offsets: `RandomSkillUnique__1` carries `[level, skill index]`,
+`RandomSupportUnique__1`/`__2` carry `[support index, level]`, and `UniquePearlSupportOne`/`Two` carry
+`[slot, non-active support index, level]` (slots 1 helmet, 2 gloves, 3 boots, 4 passive-tree skills).
+The skill description selects `Name1` normally, `Name2` when its format flags include bit 3.
+PoB aggregates the socket penalties of Domain 42 Deepwater tattoos; each native mod retains its own `-1` and
+companion stat, so a combined `-2` line must not become one arbitrary socket-penalty mod.
+Energy Blade's `StormBladeOneHand`/`StormBladeTwoHand` bases include `Transformed`.
+The original uses an unframed ordinary item payload. An unknown type hash is null after four bytes;
+live Energy Blade imports accepted hash 0 here.
+Downloaded ninja snapshots retain its computed `StormBladeImplicitLocalLightningDamage_1` values and socket indexes;
+PoB's generated weapon text omits that damage and the original sword.
+Restore the transformed snapshot from matching native data; an absent original cannot reconstruct the pre-buff sword.
 
 What the tooltip shows (live, 2026-10-20, an Iron Ring with `/item_mod <list> IncreasedLife1`): implicit under the
 properties, enchant above the implicits, explicit below a separator, scourge as orange lines among the explicits
@@ -658,12 +674,18 @@ Divine/Mirror and `AlertSound_03.ogg` for the Medicine Chest, without server-sel
 
 Clicking it sends C→S 0x24 on the object (skill 0x0266, Interaction). **Flag 0x0002 = the inventory panel is open**
 (0x040a vs 0x0408): the item goes to the cursor instead of the first free cell. The Gateway echoes the interaction at
-once (0x1ab aimed at the object, from the player's current cell) and picks the item up when its walk estimate is within
-**22 cells**: WorldItem.ot `InteractionAction interaction_distance_override = 20` is in grid cells, plus both radii
-(object_size 2). Measured with Frida (Positioned grid position at `+0x294/+0x298`): the client stopped 20.9 cells from
-the item, on the first step inside the range.
+once (0x1ab aimed at the object, from the player's current cell) and picks the item up when its walk estimate is in
+reach: WorldItem.ot `InteractionAction interaction_distance_override = 20` is in grid cells, and the client's walk adds
+the item's size on the ground (BaseItemTypes `SizeOnGround`, 1 to 3) as its tolerance, so it stops on the first cell
+within 21, 22 or 23 ([07](07-latency-visibility-movement.md) Pickups).
 
 Dying monsters drop items as WorldItems around the corpse (`DropLoot`, [15](15-progression.md) §3).
+Gold can be auto-picked before a committed kill's presentation queue drains.
+Sending that queue's old create/wake after `0x2bd` leaves a visible but unpickable pile, despite its gold being credited.
+Queue ground ids, resolve the current item at the cipher gate and send create+wake together; omit a taken id.
+Gold removal and `0x2aa` balance publication share that gate.
+A click on an issued-but-taken ground id resends removal without awarding gold again.
+
 
 **Ground items belong to the instance** (`InstanceStore`, `InstanceGround`), as in the real game. Dropped items and
 loot are kept per area instance, by Auth's instance id and its creation time (`Created` in the `resolve` answer: Auth's
@@ -953,12 +975,13 @@ See [the game rules](../re/fracturing-mirror-mechanics.md).
 
 ### Mirror of Kalandra (2026-10-21, verified live; rules rechecked 2026-10-30)
 
-`CurrencyDuplicate`, same 0x71 / 0x72 messages (`MirrorItem`). As the official mirror: a non-unique equipment item
-that is neither corrupted nor mirrored, on a supported non-`Unmodifiable` base whose `ItemClasses` equipment flag is
-set, is copied with every property (mods and values, fractured mods, quality, sockets, links, socketed gems, rarity,
+`CurrencyDuplicate`, same 0x71 / 0x72 messages (`MirrorItem`). Non-unique equipment, flasks and maps of tiers 1–16
+are eligible. Flask/map admission extends the native equipment-class rule; map tiers come from `MapKeys` or `Maps`.
+The target must be neither corrupted nor mirrored, on a supported non-`Unmodifiable` base with `Mods`.
+It is copied with every property (mods and values, fractured mods, quality, sockets, links, socketed gems, rarity,
 identification and name); the copy is **mirrored** and goes onto the cursor (S→C 0xbf on the cursor inventory) for
 the player to place, the original stays unchanged. A held item, a corrupted or mirrored target, a unique item, a
-non-equipment item (flask, jewel, map, currency), an unmodifiable base, or an item without mods is refused and
+different item class (including jewels and currency), a map outside tiers 1–16, an unmodifiable base or an item without mods is refused and
 nothing is spent. A mirrored item takes no currency at all, including a Scroll of Wisdom; Reflective Oil is not
 modelled. Using a Mirror from a stash tab is a local limitation, not a game rule.
 
