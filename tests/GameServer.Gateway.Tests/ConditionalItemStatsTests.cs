@@ -337,9 +337,12 @@ public class ConditionalItemStatsTests
             {
                 Pools = new(1, 1000, 100, 2, 0), PlayerLife = 900,
             };
+            // The hit's own instant, not the clock read after it: the first call into the character stat path pays a
+            // one-time build that takes seconds on a cold process, which would otherwise age the contact the hit
+            // records past the four-second "recently" window before the assertion reads it.
+            double now = conn.Clock.Elapsed.TotalSeconds;
             Assert.True(Game.TrySyntheticEnemyHit(conn, GameServer.Core.World.DamageType.Physical, 1,
                 block: false, spell: false, suppress: false, out _));
-            double now = conn.Clock.Elapsed.TotalSeconds;
             Assert.Equal(1, conn.RecentEnemyHits.Count(now));
             Assert.True(conn.RecentEvents.Happened(StatConditions.BeenHit, now));
             conn.InvalidateIncomingHits(clear: false);

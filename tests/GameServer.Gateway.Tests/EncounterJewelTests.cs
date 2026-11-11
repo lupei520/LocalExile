@@ -76,8 +76,37 @@ public class EncounterJewelTests
             var reward = Assert.Single(drops.EncounterJewels(elder, 83, random, provider.Current));
             Assert.False(reward.Item.Identified);
             Assert.Equal(83 + ItemDrops.ItemLevelBonus(MonsterRarity.Unique), (int)reward.Item.ItemLevel);
-            Assert.Equal(5, reward.Item.Mods.Count);
+            Assert.Equal(6, reward.Item.Mods.Count);
             Assert.Empty(drops.EncounterJewels("unrelated monster", 83, random, provider.Current));
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public void The_dropped_jewel_rolls_its_high_level_variant_at_the_dropped_item_level()
+    {
+        const string elder = "Metadata/Monsters/AtlasBosses/TheElder/TheElder";
+        string folder = Directory.CreateTempSubdirectory("encounter-jewels-level-").FullName;
+        try
+        {
+            using var store = new GameServer.Storage.GameDataStore(Path.Combine(folder, "world.db"));
+            using var db = GameServer.Storage.SqlUpdater.Open(store.Path);
+            var provider = new DropDataProvider();
+            using (var command = db.CreateCommand())
+            {
+                command.CommandText = "INSERT OR REPLACE INTO encounter_jewel_drop_overrides VALUES ($boss, $item, $chance)";
+                command.Parameters.AddWithValue("$boss", elder);
+                command.Parameters.AddWithValue("$item", "Watcher's Eye");
+                command.Parameters.AddWithValue("$chance", 1.0);
+                command.ExecuteNonQuery();
+            }
+            provider.Replace(store);
+            var drops = new ItemDrops(Program.Items, uniques: new UniqueCatalog(Program.Items));
+            // Watcher's Eye grants three fixed modifiers and two aura modifiers below item level 86, three at it (its
+            // high-level pool). The drop's level is the monster's plus the unique bonus, so a monster whose level
+            // reaches the variant rolls it: below it the same jewel keeps the low-level roll.
+            Assert.Equal(5, Assert.Single(drops.EncounterJewels(elder, 82, new Random(58), provider.Current)).Item.Mods.Count);
+            Assert.Equal(6, Assert.Single(drops.EncounterJewels(elder, 83, new Random(58), provider.Current)).Item.Mods.Count);
         }
         finally { Directory.Delete(folder, recursive: true); }
     }
