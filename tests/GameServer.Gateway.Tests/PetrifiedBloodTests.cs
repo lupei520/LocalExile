@@ -4,6 +4,19 @@ namespace GameServer.Gateway.Tests;
 
 public sealed class PetrifiedBloodTests
 {
+    // The hit path reads the character's items (a save), so the store has to be open for it: the suite's store is one
+    // static, and a test that reaches a save without opening one depends on another test's timing.
+    sealed class Store : IDisposable
+    {
+        readonly string path;
+        public Store()
+        {
+            path = Path.Combine(Path.GetTempPath(), $"localexile-petrified-blood-{Guid.NewGuid():N}.db");
+            Saves.Open(path);
+        }
+        public void Dispose() => TestEnvironment.ReleaseSaves(path);
+    }
+
     static ClientState Player(uint life, uint maximumLife)
     {
         var conn = new ClientState(new(1, "petrified", 300, 300, 100, 100, null, []), 1, 1)
@@ -42,6 +55,7 @@ public sealed class PetrifiedBloodTests
     [Fact]
     public void Hits_below_half_life_are_partly_deferred_over_four_seconds()
     {
+        using var store = new Store();
         var conn = Player(600, 1000);
         conn.PetrifiedBlood.Activate(1, 2, loseOverTimePct: 81, preventPct: 40, lifeCostPct: 40,
             manaPercent: 3500, lowLifeThresholdPct: 50, buff: 7, now: 0);
