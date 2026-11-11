@@ -427,8 +427,8 @@ public static partial class Game
         {
             foreach (var (stat, value) in GodStats)
                 if (Stats.Key(stat) is uint key) extra[key] = extra.GetValueOrDefault(key) + value;
-            // the final value the client shows: 100% of maximum life per second, per minute
-            if (Stats.Key("life_regeneration_rate_per_minute") is uint lr) extra[lr] = (int)Math.Min(int.MaxValue, (long)conn.Pools.Life * GodLifeRegenPctPerSecond / 100 * 60);
+            // The flat stat this used to set does not exist (only base_life_regeneration_rate_per_minute and the
+            // percent ones do), and the percent one above already reaches the same 100% of maximum Life per second.
         }
         List<AuraCatalog.Aura> auras;
         lock (conn.Monsters) auras = AffectingAuras(conn);
