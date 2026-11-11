@@ -32,6 +32,13 @@ public static class InfluencedItemConditions
             ["physical_damage_%_to_add_as_fire", "physical_damage_%_to_add_as_cold", "physical_damage_%_to_add_as_lightning"],
         "elemental_damage_%_taken_as_chaos" =>
             ["fire_damage_taken_%_as_chaos", "cold_damage_taken_%_as_chaos", "lightning_damage_taken_%_as_chaos"],
+        // Three conditions have no plain counterpart in Stats.dat: their effect lives on the virtual row (the
+        // conditions' own rows 21482, 21483 and 21489, and their effects 21546, 18149 and 21545). Naming the plain
+        // form would land the value on a stat nothing has, so the condition would hold and still change nothing.
+        "nearby_enemies_are_blinded" => ["virtual_nearby_enemies_are_blinded"],
+        "nearby_enemies_are_intimidated" => ["virtual_nearby_enemies_are_intimidated"],
+        "gain_life_regeneration_per_minute_%_for_1_second_every_4_seconds" =>
+            ["virtual_gain_life_regeneration_per_minute_%_for_1_second_every_4_seconds"],
         _ => [target],
     };
 }
