@@ -70,7 +70,7 @@ public static class GameDataFiles
     /// entry, the version that added it): with an older one the feature runs without it, silently.</summary>
     public static readonly (string Entry, int Version, string Feature)[] Needed =
     [
-        ("tables", 4, "Kirac progression, gold refresh prices and native trap identities"),
+        ("tables", 6, "the 3.29.3c tables and the Delve's sulphite deposits' native area-level rewards: without them the deposits yield no native sulphite"),
         ("vendor-stock", 2, "vendor-specific quest/class gem membership and captured layout groups"),
         ("item-types", 2, "quest items' .it Quest flags (held, picked up, handed in, used): without them quest items set no flags"),
         ("animation-contacts", 8, "class rig animation indices, spell cancellation events and every contact frame of a clip for multi-strike skills: without them cast movement waits for the full spell and later strikes fall back to a half-attack gap"),
