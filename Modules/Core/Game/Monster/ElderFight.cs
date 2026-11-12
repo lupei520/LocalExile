@@ -128,7 +128,8 @@ sealed class ElderFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
         siphonNext = now + 0.8;
         siphonTick = new MonsterAttack(AtlasBosses.Skill(Variety, AtlasBosses.SiphonEffect), 0.5, 0, dot.Scale(0.5))
         { Spell = true, Scripted = true };
-        Swing(conn, AtlasBosses.SiphonEffect);
+        // The clip only: the drain is the tick on the ground, and the skill's own row carries no hit.
+        Swing(conn, AtlasBosses.SiphonEffect, contact: false);
         await Effect(conn, siphonAt, AtlasBosses.ElderSiphonArt, 3.6, 1.6f);
     }
 
@@ -138,7 +139,8 @@ sealed class ElderFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
     {
         var slam = Attack(conn, AtlasBosses.SlammingTentaclesEffect);
         slam = slam with { Damage = slam.Damage.Scale(1.2) };
-        Swing(conn, AtlasBosses.SlammingTentaclesEffect);
+        // The clip only: the five portals that open are the hits, one second later.
+        Swing(conn, AtlasBosses.SlammingTentaclesEffect, contact: false);
         for (int i = 0; i < count; i++)
         {
             double angle = Math.Tau * i / count + Random.Shared.NextDouble() * 0.4;
@@ -157,7 +159,8 @@ sealed class ElderFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
         var pos = boss.Walk.Position(now);
         var attack = Attack(conn, AtlasBosses.ExpandingNovaEffect);
         await Effect(conn, pos, AtlasBosses.ElderNovaArt, 2.4, 2f);
-        Swing(conn, AtlasBosses.ExpandingNovaEffect);
+        // The clip only: the ring that leaves him is the hit, 1.4 s later.
+        Swing(conn, AtlasBosses.ExpandingNovaEffect, contact: false);
         // The ring reaches 22 units 1.4 s after the cast; anything still inside takes the skill's damage.
         pending.Add((now + 1.4, pos, 22, attack));
         _ = player;

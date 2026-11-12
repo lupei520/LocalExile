@@ -24,20 +24,20 @@ public sealed class CombatLabCastParsingTests
     {
         var match = Finds("Splitting Steel");
         // "/cast Splitting Steel Rhoa" -> skill "Splitting Steel", aim "Rhoa".
-        var (skill, aim) = CommandsRules.SplitCast(["Splitting", "Steel", "Rhoa"], match);
+        var (skill, aim) = CombatLab.SplitCast(["Splitting", "Steel", "Rhoa"], match);
         Assert.Equal("Splitting Steel", skill);
         Assert.Equal(new[] { "Rhoa" }, aim);
 
         // A quoted first token is one token, and behaves identically.
-        var (quoted, quotedAim) = CommandsRules.SplitCast(["\"Splitting Steel\"", "Rhoa"], match);
+        var (quoted, quotedAim) = CombatLab.SplitCast(["\"Splitting Steel\"", "Rhoa"], match);
         Assert.Equal("Splitting Steel", quoted);
         Assert.Equal(new[] { "Rhoa" }, quotedAim);
 
         // The single-token case is unchanged, and the splitter leaves the aim alone (an x y pair stays two arguments).
-        var (one, none) = CommandsRules.SplitCast(["Splitting Steel"], match);
+        var (one, none) = CombatLab.SplitCast(["Splitting Steel"], match);
         Assert.Equal("Splitting Steel", one);
         Assert.Empty(none);
-        var (cell, xy) = CommandsRules.SplitCast(["Splitting", "Steel", "120", "340"], match);
+        var (cell, xy) = CombatLab.SplitCast(["Splitting", "Steel", "120", "340"], match);
         Assert.Equal("Splitting Steel", cell);
         Assert.Equal(new[] { "120", "340" }, xy);
     }
@@ -46,18 +46,18 @@ public sealed class CombatLabCastParsingTests
     public void Cast_refuses_rather_than_picking_a_shorter_run()
     {
         // Only "Steel" names a gem, and it is not a leading run: nothing may be picked silently and no aim consumed.
-        var (skill, aim) = CommandsRules.SplitCast(["Splitting", "Steel", "Rhoa"], Finds("Steel"));
+        var (skill, aim) = CombatLab.SplitCast(["Splitting", "Steel", "Rhoa"], Finds("Steel"));
         Assert.Equal("Splitting", skill);
         Assert.Empty(aim);
 
         // A run that names several gems is what the refusal speaks about, so the caller can list them.
-        var (ambiguous, ambiguousAim) = CommandsRules.SplitCast(["Ice", "Nova", "Rhoa"],
+        var (ambiguous, ambiguousAim) = CombatLab.SplitCast(["Ice", "Nova", "Rhoa"],
             Ambiguous("Ice Nova", "0x0001 Ice Nova", "0x0002 Ice Nova of Frostbolts"));
         Assert.Equal("Ice Nova", ambiguous);
         Assert.Empty(ambiguousAim);
 
         // An unknown name falls back to the first argument, which is what the old refusal spoke about.
-        var (unknown, _) = CommandsRules.SplitCast(["Nope", "Nope", "Rhoa"], Finds("Splitting Steel"));
+        var (unknown, _) = CombatLab.SplitCast(["Nope", "Nope", "Rhoa"], Finds("Splitting Steel"));
         Assert.Equal("Nope", unknown);
     }
 }

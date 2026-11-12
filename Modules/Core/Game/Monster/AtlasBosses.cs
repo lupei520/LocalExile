@@ -365,11 +365,12 @@ static class AtlasBosses
         // attack such as a slam keeps its numbers too). A slam or a melee whose stat set carries no base damage of its own
         // hits for the variety's physical damage, the way every monster's swing does. The two degen skills are the
         // exception: their whole damage is the per-minute degen DamageOverTime reads, and a physical fallback there would
-        // put an invisible hit on top of the beam or the siphon.
+        // put an invisible hit on top of the beam or the siphon. The Shaper's retreat is one as well: his blink row
+        // (shaper_banish_zana) names no damage at all.
         var damage = catalog.HitDamage(effect, level);
         if (IsSirus(variety)) damage = SirusDamage(effect, min, max);
         else if (IsMaven(variety) || IsNucleus(variety)) damage = MavenDamage(effect, min, max);
-        else if (damage.MaxTotal <= 0 && effect is not (CelestialBeamEffect or SiphonEffect))
+        else if (damage.MaxTotal <= 0 && effect is not (CelestialBeamEffect or SiphonEffect or RetreatEffect))
             damage = DamagePacket.Of(DamageType.Physical, min, max);
         double seconds = melee ? Math.Max(0.3, variety.AttackMs / 1000.0) : Math.Max(0.3, catalog.CastTimeMs(effect) / 1000.0);
         double reach = melee ? variety.AttackRange : 45;

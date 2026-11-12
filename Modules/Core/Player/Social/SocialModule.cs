@@ -98,64 +98,59 @@ public sealed class SocialModule : IModule
         });
         // A '%' line is party chat. Returning false leaves the packet to the Gateway's own chat handling (local, '#'
         // global, '$' trade); it ignores a party line (there is no party registry there).
-        module.OnPacket(InstanceChat.ChatId, async p =>
+        GameEvents.Packet(InstanceChat.ChatId).Add(module.Manifest.Id, async (conn, bytes) =>
         {
-            var (conn, remote) = Of(p);
-            await SocialFeature.PartyChat(remote, conn, InstanceChat.ReadChat(p.Bytes.ToArray()).Text);
+            await SocialFeature.PartyChat(conn.Wire.Remote, conn, InstanceChat.ReadChat(bytes).Text);
             return false;
         });
         // C→S 0x94: the party panel's Kick, a wstr member name (captured live 2026-11-08: the client sent the kicked bot's
         // name as a compact wstr). A bot party is the PlayerBots module's and it sees the packet first, so this handler
         // only runs for a party of real players; returning false hands it on.
-        module.OnPacket(0x0094, async p =>
+        GameEvents.Packet(0x0094).Add(module.Manifest.Id, async (conn, bytes) =>
         {
-            var (conn, remote) = Of(p);
-            string name = new LoginReader(p.Bytes.Span[2..]).WStr();
+            string name = new LoginReader(bytes.AsSpan(2..)).WStr();
             if (name.Length == 0) return false;
             var (ok, message) = await SocialFeature.Kick(conn, name);
-            Console.WriteLine($"[gateway] {remote} <= 0x0094 kick \"{name}\": {(ok ? message : "not taken")}");
+            Console.WriteLine($"[gateway] {conn.Wire.Remote} <= 0x0094 kick \"{name}\": {(ok ? message : "not taken")}");
             if (ok) await SocialFeature.Tell(conn, message);
             return ok;
         });
         // C→S 0xac (3 bytes: the id alone): the party panel asks for its members again — it opens it, or a member changes
         // area. Answering with 0xa7 per member is what fills the panel's area column ("Travelling..." until then).
-        module.OnPacket(0x00ac, async p =>
+        GameEvents.Packet(0x00ac).Add(module.Manifest.Id, async (conn, bytes) =>
         {
-            var (conn, remote) = Of(p);
-            await SocialFeature.RefreshParty(remote, conn);
+            await SocialFeature.RefreshParty(conn.Wire.Remote, conn);
             return true;
         });
 
         // Party commands: the panel's buttons need packets whose layouts are not known yet, so the same operations are
         // also reachable as chat commands. Everything they send (0xa9, 0xaa) is the traffic the UI path already uses.
-        module.OnChatCommand("invite", "/invite <character name> (invite that player to your party)", async cmd =>
+        GameEvents.Command(module.Manifest.Id, "invite", "/invite <character name> (invite that player to your party)", async (conn, args) =>
         {
-            if (cmd.Args.Count == 0) { await SocialFeature.Tell(cmd.Player, "用法：/invite <角色名>"); return; }
-            string name = string.Join(' ', cmd.Args);
-            var conn = ConnOf(cmd.Player);
+            if (args.Length == 0) { await SocialFeature.Tell(conn, "用法：/invite <角色名>"); return; }
+            string name = string.Join(' ', args);
             bool ok = await SocialFeature.InviteToParty(conn.Wire.Remote, conn, name);
-            await SocialFeature.Tell(cmd.Player, ok ? $"已邀请 {name}。" : $"没找到在线角色 \"{name}\"（需已进入游戏）。");
+            await SocialFeature.Tell(conn, ok ? $"已邀请 {name}。" : $"没找到在线角色 \"{name}\"（需已进入游戏）。");
         });
-        module.OnChatCommand("leave", "/leave (leave your party)", async cmd =>
+        GameEvents.Command(module.Manifest.Id, "leave", "/leave (leave your party)", async (conn, args) =>
         {
-            var conn = ConnOf(cmd.Player);
-            if (SocialFeature.PartyOf(conn) is not uint party) { await SocialFeature.Tell(cmd.Player, "你没有队伍。"); return; }
+            if (SocialFeature.PartyOf(conn) is not uint party) { await SocialFeature.Tell(conn, "你没有队伍。"); return; }
             await SocialFeature.LeaveParty(conn.Wire.Remote, conn, party);
         });
-        module.OnChatCommand("kick", "/kick <character name> (party leader only: remove that member)", async cmd =>
+        GameEvents.Command(module.Manifest.Id, "kick", "/kick <character name> (party leader only: remove that member)", async (conn, args) =>
         {
-            if (cmd.Args.Count == 0) { await SocialFeature.Tell(cmd.Player, "用法：/kick <角色名>"); return; }
-            await SocialFeature.KickMember(cmd.Player, ConnOf(cmd.Player), string.Join(' ', cmd.Args));
+            if (args.Length == 0) { await SocialFeature.Tell(conn, "用法：/kick <角色名>"); return; }
+            await SocialFeature.KickMember(PlayerOf(conn), conn, string.Join(' ', args));
         });
-        module.OnChatCommand("promote", "/promote <character name> (party leader only: make that member the leader)", async cmd =>
+        GameEvents.Command(module.Manifest.Id, "promote", "/promote <character name> (party leader only: make that member the leader)", async (conn, args) =>
         {
-            if (cmd.Args.Count == 0) { await SocialFeature.Tell(cmd.Player, "用法：/promote <角色名>"); return; }
-            await SocialFeature.PromoteMember(cmd.Player, ConnOf(cmd.Player), string.Join(' ', cmd.Args));
+            if (args.Length == 0) { await SocialFeature.Tell(conn, "用法：/promote <角色名>"); return; }
+            await SocialFeature.PromoteMember(PlayerOf(conn), conn, string.Join(' ', args));
         });
-        module.OnChatCommand("decline", "/decline (refuse the party invitations waiting for you)", async cmd =>
+        GameEvents.Command(module.Manifest.Id, "decline", "/decline (refuse the party invitations waiting for you)", async (conn, args) =>
         {
-            int refused = await SocialFeature.DeclineInvites(ConnOf(cmd.Player));
-            await SocialFeature.Tell(cmd.Player, refused == 0 ? "没有待接受的组队邀请。" : $"已拒绝 {refused} 个组队邀请。");
+            int refused = await SocialFeature.DeclineInvites(conn);
+            await SocialFeature.Tell(conn, refused == 0 ? "没有待接受的组队邀请。" : $"已拒绝 {refused} 个组队邀请。");
         });
     }
 }

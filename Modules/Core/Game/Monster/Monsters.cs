@@ -1493,7 +1493,7 @@ public static partial class Game
 
     public static async Task MonsterSwing(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
         SpawnedMonster m, int action, MonsterAttack? use = null, bool area = false, double areaRadius = 0, ushort? sequence = null,
-        double? begunAt = null, bool contact = true)
+        double? begunAt = null, bool contactHit = true)
     {
         if ((use ?? m.Attack) is not { } a) return;
         // Entry protection: a protected player is not attacked (the planner also skips hostile monsters meanwhile).
@@ -1585,7 +1585,7 @@ public static partial class Game
         // A clip only: the controller lands this skill's hit itself (its own geometry, its own telegraph), so the
         // action must not also land a contact. The contact is the one that checks the range (45 cells for a spell),
         // so without this the player takes the hit twice, and once more after stepping out of the telegraph.
-        if (!contact) return;
+        if (!contactHit) return;
         await MonsterContact(remote, stream, ciphers, conn, id, m, action, seq, a);
     }
 

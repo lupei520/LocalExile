@@ -1,9 +1,40 @@
 using GameServer.Core.Protocol.Instance;
+using GameServer.Core.World;
 
 namespace GameServer.Gateway.Tests;
 
 public sealed class LabyrinthTrialTests
 {
+    [Fact]
+    public void A_second_entrant_joins_the_live_izaro_and_only_a_stale_one_is_retired()
+    {
+        var catalog = new MonsterCatalog();
+        var variety = catalog.Find(CampaignBosses.IzaroMaul);
+        Assert.NotNull(variety);
+        var live = new SpawnedMonster("Izaro@84", new PlayerWalk(100, 100, 20, null, size: 3), 60, 6, 1_000_000)
+        {
+            Variety = variety, Level = 84, Life = 500_000, MaxLife = 1_000_000,
+        };
+        var stale = new SpawnedMonster("Izaro@84", new PlayerWalk(120, 100, 20, null, size: 3), 60, 6, 1_000_000)
+        {
+            Variety = variety, Level = 84, Life = 0, MaxLife = 1_000_000, Dead = true,
+        };
+        var other = new SpawnedMonster("Zombie@80", new PlayerWalk(140, 100, 20, null, size: 2), 60, 6, 100)
+        {
+            Variety = catalog.Find("Metadata/Monsters/ZombieBoss/ZombieBossHillockNormal"), Level = 80, Life = 100, MaxLife = 100,
+        };
+
+        // The Izaro that is fighting is live: the player who comes in joins that fight, and the fight is not ended by
+        // his coming (review 2026-11-11: a second entrant must not end or replace the first player's live trial).
+        var (liveId, staleIds) = QuestobjectsRules.IzaroActors(
+            [new KeyValuePair<uint, SpawnedMonster>(7, live),
+             new KeyValuePair<uint, SpawnedMonster>(8, stale),
+             new KeyValuePair<uint, SpawnedMonster>(9, other)], variety.Id);
+        Assert.Equal(7u, liveId);
+        // Only the stale one (dead, but still standing in the table) is retired; another monster is none of its business.
+        Assert.Equal([8u], staleIds);
+    }
+
     [Fact]
     public void TrialDoorBlobAndUnblockFollowTheClientReaders()
     {

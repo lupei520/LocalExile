@@ -5,7 +5,9 @@ using GameServer.Core.Protocol.Login;
 // ordinary skill pipeline on a character that is really in a world, and to read what each hit actually did, instead of
 // driving a mouse or guessing from two life readings. The transport and the framework implement none of it.
 // Implemented by the Game module (GameLogic); Agents/docs/dev/combat-lab.md.
-interface ICombatLabCommands
+// Public, like the rest of the boundary a module and a mod reach (the Gateway hands over through public types now
+// that the modules no longer see its internals).
+public interface ICombatLabCommands
 {
     /// <summary>The id of one of this connection's own gems, by id or by name (a gem name, or part of one); null when
     /// nothing matches or several do.</summary>

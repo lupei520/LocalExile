@@ -202,6 +202,38 @@ public static partial class Game
         MirrorMinion(conn, bytes, id);
     }
 
+    /// <summary>Takes a monster out of the instance for good: dead server-side, its queued orders cancelled, its
+    /// shared origin retired, and its removal published to every client of the instance that shows it. The encounter
+    /// that owned it does not see a death (the monster is retired, not killed), so a fight that waits for it does not
+    /// count as won.</summary>
+    public static async Task RetireMonster(ClientState conn, uint id, string? log = null)
+    {
+        lock (conn.Monsters)
+        {
+            if (conn.Monsters.TryGetValue(id, out var monster))
+            {
+                monster.Retired = true;
+                monster.Dead = true;
+                monster.Life = 0;
+                monster.ActionGeneration++;   // a queued order of the old fight does not revive him
+            }
+            conn.Monsters.Remove(id);
+            conn.MonsterViews.Remove(id);
+            conn.AsleepMonsters.Remove(id);
+            conn.Instance?.World.MonsterOrigins.TryRemove(id, out _);
+        }
+        var bytes = InstanceProtocol.RemoveObject(id);
+        var (remote, stream, ciphers) = conn.Wire;
+        await Send(remote, stream, ciphers, bytes, log);
+        // The other clients of the instance show him as well: the removal goes to every one of them that has him.
+        foreach (var peer in conn.Instance?.Presence.PlayersExcept(conn.PeerId) ?? [])
+        {
+            if (peer.Owner is not { Outbox: { } outbox } other || other.Closed || other.LeavingArea) continue;
+            if (!other.MonsterViews.ContainsKey(id)) continue;
+            _ = outbox(bytes, null);
+        }
+    }
+
     // An instance monster's action (a swing, an area skill, a summon's clip, not a walk: SyncInstanceMonsters sends
     // those) or hit reaction, made for this connection's client: to every other client in the instance that has it awake.
     // Its target, the local player there (PlayerId), is this player as the others know them (PeerId).

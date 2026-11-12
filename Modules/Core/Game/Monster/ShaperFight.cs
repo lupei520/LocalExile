@@ -105,7 +105,8 @@ sealed class ShaperFight(uint id, SpawnedMonster boss, ClientState conn) : Atlas
         beamTick = dot.MaxTotal <= 0 ? null : new MonsterAttack(
             AtlasBosses.Skill(Variety, AtlasBosses.CelestialBeamEffect), 0.5, 0, dot.Scale(0.5))
         { Spell = true, Scripted = true };
-        Swing(conn, AtlasBosses.CelestialBeamEffect);
+        // The clip only: the burning ground is the hit, and the skill's own row carries no hit of its own.
+        Swing(conn, AtlasBosses.CelestialBeamEffect, contact: false);
         await Effect(conn, beamAt, AtlasBosses.CelestialBeamArt, 3.6, 1.6f);
     }
 
@@ -130,7 +131,9 @@ sealed class ShaperFight(uint id, SpawnedMonster boss, ClientState conn) : Atlas
         double angle = Math.Atan2(pos.Y - player.Y, pos.X - player.X);
         var to = conn.Layout.Near((pos.X + (int)(Math.Cos(angle) * 18), pos.Y + (int)(Math.Sin(angle) * 18)));
         await Effect(conn, pos, AtlasBosses.ShaperTeleportArt, 1.2);
-        Swing(conn, AtlasBosses.RetreatEffect);
+        // The clip only: the retreat is a blink. Its row (shaper_banish_zana) names no damage of its own, so it must
+        // not fall back to the variety's physical hit either.
+        Swing(conn, AtlasBosses.RetreatEffect, contact: false);
         await Teleport(conn, to, now);
         await Effect(conn, to, AtlasBosses.ShaperTeleportArt, 1.2);
     }

@@ -20,9 +20,9 @@ public sealed class CombatLabDropTests
         var conn = Conn();
         // Before the use, the ledger holds nothing: the receipt says so and claims no hit.
         Assert.Equal("; nothing recorded yet - read /damage (a projectile may still be in flight)",
-            CommandsRules.LabNote(conn, CommandsRules.NewestLabRecord(conn)));
+            CombatLab.LabNote(conn, CombatLab.NewestLabRecord(conn)));
 
-        var before = CommandsRules.NewestLabRecord(conn);
+        var before = CombatLab.NewestLabRecord(conn);
         Game.NoteRefusal(conn, 0x0105, -1, null, Reason, label: "SplittingSteel");
 
         var record = Assert.Single(DamageLedger.Recent(conn, 1));
@@ -41,20 +41,20 @@ public sealed class CombatLabDropTests
         Assert.Equal(0, json.RootElement.GetProperty("taken").GetInt32());
 
         // And the receipt now names the refusal instead of only promising that a refusal is possible.
-        Assert.Equal($"; the ledger holds a refusal: {Reason}", CommandsRules.LabNote(conn, before));
+        Assert.Equal($"; the ledger holds a refusal: {Reason}", CombatLab.LabNote(conn, before));
     }
 
     [Fact]
     public void A_monsters_hit_is_not_read_as_the_use_s_outcome()
     {
         var conn = Conn();
-        var before = CommandsRules.NewestLabRecord(conn);
+        var before = CombatLab.NewestLabRecord(conn);
         // The two monsters the live case was fighting hit the character while the use was handed over.
         DamageLedger.Note(conn, new DamageRecord(3.5, "incoming", "Rhoa Mare@20", 0x1234, 0x8000001u,
             "Exile", 20, "", 40, 40, "physical:40", false, "hit", 900, 860, 0));
 
         // An incoming record is not evidence about the use: the receipt must not report it as the use's outcome.
         Assert.Equal("; nothing recorded yet - read /damage (a projectile may still be in flight)",
-            CommandsRules.LabNote(conn, before));
+            CombatLab.LabNote(conn, before));
     }
 }

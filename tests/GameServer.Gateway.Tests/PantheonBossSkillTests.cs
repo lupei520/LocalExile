@@ -89,7 +89,7 @@ public class PantheonBossSkillTests
             CampaignBosses.AvariusDivine, CampaignBosses.IzaroMaul, CampaignBosses.IzaroOneHand,
             CampaignBosses.IzaroDualWield,
             CampaignBosses.Atziri, CampaignBosses.Atziri2,
-            CampaignBosses.Kitava, CampaignBosses.KitavaFinal, CampaignBosses.ShavronneTower,
+            CampaignBosses.ShavronneTower,
             CampaignBosses.BruteTower, CampaignBosses.Maligaro, CampaignBosses.GeneralAdus, CampaignBosses.Vilenta })
         {
             var variety = monsters.Find(id);

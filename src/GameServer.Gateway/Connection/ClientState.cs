@@ -158,6 +158,10 @@ public sealed class SpawnedMonster(string label, PlayerWalk walk, int aggroRange
     public bool FetishGrace;
     /// <summary>Pending life thresholds and immunity owned by an encounter controller.</summary>
     public LifePhaseGate? LifePhases;
+    /// <summary>The encounter took the monster out of the instance instead of killing it (the Labyrinth's arena retires
+    /// the Izaro of an earlier entry): the fight that was waiting for it does not count as won, and nothing that reads
+    /// his life afterwards may take that for a death.</summary>
+    public bool Retired;
     /// <summary>An encounter's own entrance: hits do nothing and no chill, freeze or shock lands until its script clears it
     /// (Izaro rising on his elevator; live, the ailments landed while hits did nothing).</summary>
     public bool EntranceGrace { get => Ailments.Grace; set => Ailments.Grace = value; }

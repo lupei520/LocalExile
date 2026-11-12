@@ -41,9 +41,9 @@ public sealed class CombatLabRefusalTests
         // One hit, one critical hit, one refusal: a refused use adds no damage and is not a hit.
         var path = "logs/damage-OfflineWitch.jsonl";
         Assert.Equal("damage 3 record(s) -> logs/damage-OfflineWitch.jsonl (1 hit, 1 refused, 1 critical, 80 taken)",
-            CommandsRules.DamageSummary([Hit(raw: 400, taken: 50), Hit(raw: 900, taken: 30, critical: true), Refusal()], path));
+            CombatLab.DamageSummary([Hit(raw: 400, taken: 50), Hit(raw: 900, taken: 30, critical: true), Refusal()], path));
         Assert.Equal("damage 1 record(s) -> logs/damage-OfflineWitch.jsonl (0 hit, 1 refused, 0 critical, 0 taken)",
-            CommandsRules.DamageSummary([Refusal()], path));
+            CombatLab.DamageSummary([Refusal()], path));
     }
 
     static DamageRecord Refusal() =>

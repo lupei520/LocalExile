@@ -30,9 +30,10 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
 - **Start:** the systems the 74 unsupported monster mods need (auras on allies, retaliation and on-death skills, ailments and
   curses on the player; [14](../docs/protocol/14-monster-packs.md) §5), the life-gate stages (`BossFights.cs` has
   Hillock's and `KingInMists.cs` the two-form Ritual pinnacle; `CampaignBosses.cs` gives the acts' bosses their kits but
-  no stage), Izaro's arena driver (`IzaroFights.cs` has the elevator, doors, life split and lines; nothing calls it, and
-  his kits are in `CampaignBosses.cs`; the rooms' objects are in `data/room-points.json` now, the elevator is a tile
-  object nothing reads yet), the endgame bosses' rows picked by hand where the generated kit is wrong, pack
+  no stage), Izaro's arena (his driver runs: `Rules.Izaro.cs` places the elevator, the doors and the gate and plays the
+  trial, `IzaroFights.cs` has the day's weapon, the life split and the lines, and the rooms' objects come from
+  `data/room-points.json`; what is still missing is his `LabyrinthSecrets` lines and the arena's monograph), the endgame
+  bosses' rows picked by hand where the generated kit is wrong, pack
   `Grounds`, the varieties with ControlZone / BlightTower / Mercenary … components (each needs its deserializer,
   schema.md; NPC, InteractionAction and Timer are written), the bandit lords' help-or-kill dialogue, tile spawner bosses
   (Marceus).

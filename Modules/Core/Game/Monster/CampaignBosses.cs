@@ -164,6 +164,11 @@ static class CampaignBosses
     // How many monsters one boss may have alive at once; a summon row that would go past it raises nothing.
     const int AddCap = 6;
 
+    // How wide a slam lands around the boss: the King in the Mists' vine slam is 22 cells and its cascade 18,
+    // so a row that lands around the player is a few cells wide. An area hit as wide as the skill's reach (60
+    // cells) cannot be dodged at all.
+    const double SlamRadius = 20;
+
     // Attacks that hit harder than their stat set names (the slams and the big swings): a scale on the variety's
     // physical damage, the way the Brine King's slam reads its own (BrineKing.cs Attack: Scale(2)).
     static readonly Dictionary<int, double> DamageScale = new()
@@ -333,8 +338,9 @@ static class CampaignBosses
     internal const string Avarius = "Metadata/Monsters/AvariusCasticus/AvariusCasticus";  // a5q?, Chamber of Innocence
     internal const string AvariusReassembled = "Metadata/Monsters/AvariusCasticus/AvariusCasticusWickerman"; // a10q?
     internal const string AvariusDivine = "Metadata/Monsters/AvariusCasticus/AvariusCasticusDivine"; // Innocence, a5
-    internal const string Kitava = "Metadata/Monsters/KitavaBoss/Kitava1";               // a5q?, Cathedral Rooftop
-    internal const string KitavaFinal = "Metadata/Monsters/KitavaBoss/KitavaFinal";      // a10q?, The Control Blocks
+    // Kitava is not here: his encounter is upstream's own (KitavaActFive.cs for the Cathedral Rooftop,
+    // KitavaActTen.cs for the Control Blocks). They own his thresholds, his kit and the quest flags his fight
+    // ends with (a5q6-CompletedBoss, EndGameAvailable), so a second controller here would fight him twice over.
     internal const string ShavronneTower = "Metadata/Monsters/Shavronne/ShavronneTower"; // a6q2, Shavronne's Tower
     internal const string BruteTower = "Metadata/Monsters/Brute/BruteTower";             // the same arena's second boss
     internal const string Maligaro = "Metadata/Monsters/Maligaro/Maligaro2";             // a7q2, Maligaro's Sanctum
@@ -383,10 +389,6 @@ static class CampaignBosses
     // Innocence (his second form in the same fight): the cleave, the super projectile, the delayed blast, the divine
     // beam, the charge and the firestorm; he raises the same statues.
     internal static readonly int[] AvariusDivineEffects = [406, 6287, 6293, 2728, 6563, 6568, 1466, 6326];
-    // Kitava's first fight: the swipe, the slam, and the debris he throws out of the arena.
-    internal static readonly int[] KitavaEffects = [6590, 6598, 6603, 6636];
-    // Kitava, the final fight: the swipe, the X blast and nuke, a beam sweep, the death breath and the orbs.
-    internal static readonly int[] KitavaFinalEffects = [6592, 6587, 6589, 8484, 8508, 8678, 6625];
     // Shavronne: the pulse, the levitating projectile, the empower beam and the barrage; she teleports and summons.
     internal static readonly int[] ShavronneEffects = [3804, 6671, 6673, 6691, 6715, 5066];
     // Reassembled Brutus: his two Default Attacks, the wall hook and the levitation slam.
@@ -426,7 +428,7 @@ static class CampaignBosses
 
     internal static bool IsAct(MonsterCatalog.Variety? v) => v?.Id is Brutus or Merveil or MerveilTwisted or Weaver
         or Piety or Dominus or DominusAscendant or Kaom or Daresso or PietyBeast or Malachai or Malachai2
-        or Avarius or AvariusReassembled or Kitava or KitavaFinal or ShavronneTower or BruteTower or Maligaro
+        or Avarius or AvariusReassembled or ShavronneTower or BruteTower or Maligaro
         or GeneralAdus or Vilenta or AvariusDivine;
 
     // The Lord's Labyrinth's Izaro: one body, the day's weapon.
@@ -443,12 +445,23 @@ static class CampaignBosses
 
     /// <summary>A bar-boss no other controller claims: the map, league and pinnacle fights the atlas, the Maven, the
     /// Elder, Sirus, the Brine King, the Depraved Trinity, Doedre and the King in the Mists do not own. Its own granted
-    /// rows are its whole kit (<see cref="EndgameKit"/>).</summary>
+    /// rows are its whole kit (<see cref="EndgameKit"/>).
+    /// <para>Two kinds of boss stay out as well. Kitava's encounter is upstream's own (KitavaActFive.cs,
+    /// KitavaActTen.cs): it owns his thresholds, his kit and the quest flags his fight ends with. And a boss main
+    /// drives with a stage of its own (Hillock's sword stage, BossFights) keeps it: the stage never starts when a
+    /// life gate takes the hit before <c>BossFights.Damage</c> does.</para></summary>
     internal static bool IsEndgame(MonsterCatalog.Variety? v) => v is { BossHealthBar: true, GrantedEffects.Count: > 0 } && !IsOwned(v)
         && !AtlasBosses.IsBoss(v) && !BrineKing.IsBoss(v) && !DepravedTrinity.IsBoss(v) && !DoedreSewers.IsBoss(v)
-        && !KingInMists.IsBoss(v) && !VaalOversoul.IsBoss(v);
+        && !KingInMists.IsBoss(v) && !VaalOversoul.IsBoss(v)
+        && !KitavaActFive.IsActor(v) && !KitavaActTen.IsActor(v)
+        && BossFights.For(v.Id) is null;
 
     internal static bool IsBoss(MonsterCatalog.Variety? v) => IsOwned(v) || IsEndgame(v);
+
+    /// <summary>Whether this controller drives the monster: a boss of its own, or a bar-boss nobody else claims.
+    /// A monster another module scripted (the Survivors' gate bosses, which borrow campaign bosses' varieties) has a
+    /// controller of its own, so it is left alone.</summary>
+    internal static bool Drives(SpawnedMonster monster) => IsBoss(monster.Variety) && !monster.Scripted;
 
     // ---- The endgame bosses' kits ----
     //
@@ -537,8 +550,6 @@ static class CampaignBosses
         Avarius => AvariusEffects,
         AvariusReassembled => AvariusReassembledEffects,
         AvariusDivine => AvariusDivineEffects,
-        Kitava => KitavaEffects,
-        KitavaFinal => KitavaFinalEffects,
         ShavronneTower => ShavronneEffects,
         BruteTower => BruteTowerEffects,
         Maligaro => MaligaroEffects,
@@ -637,7 +648,7 @@ static class CampaignBosses
         List<(uint Id, SpawnedMonster Monster)> found = [];
         lock (conn.Monsters)
             foreach (var (id, monster) in conn.Monsters)
-                if (IsBoss(monster.Variety)) found.Add((id, monster));
+                if (Drives(monster)) found.Add((id, monster));
         if (found.Count == 0 && !Fights.TryGetValue(conn.Instance, out _)) return;
         foreach (var (id, monster) in found)
         {
@@ -765,6 +776,11 @@ static class CampaignBosses
             return Task.CompletedTask;
         }
 
+        // This fight owns no life gate: the campaign bosses have none (Monsters.cs), and the one gate a boss of
+        // this list can carry belongs to another controller (the Labyrinth's arena rule watches Izaro's gate to
+        // know that he leaves). Arming it here would take the threshold away from that rule.
+        protected override bool UsesLifeGate => false;
+
         protected override async Task Act(ClientState conn, double now)
         {
             var watchers = Watchers();
@@ -781,12 +797,15 @@ static class CampaignBosses
             foreach (int effect in effects)
             {
                 if (ready.GetValueOrDefault(effect) > now) continue;
+                var cast = Attack(conn, effect);
                 bool melee = effect == BasicEffect(variety) && MeleeLike(variety);
+                // A projectile row reaches across the arena; a slam lands around the boss, so it is only cast when
+                // the player stands close enough for it to reach them.
                 bool closeEnough = melee || effect is 808 or 807 or 4364 or 6792   // leaps and charges close in
                     ? distance <= Math.Max(variety.AttackRange, 6) + 4
-                    : distance <= 60;
+                    : cast.Ranged ? distance <= 60 : distance <= SlamRadius;
                 if (!closeEnough) continue;
-                ready[effect] = now + Cooldown(effect) + Attack(conn, effect).Seconds;
+                ready[effect] = now + Cooldown(effect) + cast.Seconds;
                 await Cast(conn, effect, player, now, distance);
                 return;
             }
@@ -825,12 +844,12 @@ static class CampaignBosses
                     return;
                 // Arakaali's egg mortar: the eggs land where the mortar does and hatch into her broodlings.
                 case 5221 or 5222:
-                    SwingWith(conn, attack, effect, area: true, radius: attack.Range);
+                    SwingWith(conn, attack, effect, area: true, radius: Math.Min(attack.Range, SlamRadius));
                     if (eggs.Count < 4) pending.Add((now + Math.Max(1, attack.Seconds), EggVariety, player.X, player.Y, false));
                     return;
                 // Garukhan's cascade: the sand it throws up is what her warriors rise out of.
                 case 8445:
-                    SwingWith(conn, attack, effect, area: true, radius: attack.Range);
+                    SwingWith(conn, attack, effect, area: true, radius: Math.Min(attack.Range, SlamRadius));
                     if (AliveAdds(conn) < 4)
                         for (int k = 0; k < 2; k++)
                             pending.Add((now + Math.Max(1, attack.Seconds), GarukhanMinion, player.X + 3 * k, player.Y, false));
@@ -876,8 +895,11 @@ static class CampaignBosses
                     return;
                 default:
                     // Everything that is not the plain swing is a slam, a hook or a projectile row: it lands in its
-                    // skill's own reach rather than on the one player it faced.
-                    SwingWith(conn, attack, effect, area: effect != BasicEffect(variety), radius: attack.Range);
+                    // skill's own reach rather than on the one player it faced. A marker row (hide, burrow, dodge, a
+                    // spawner) carries no hit of its own: the clip plays and nothing else, so no contact lands on
+                    // the player at all (an empty hit still rolls the evasion and the when-hit effects).
+                    SwingWith(conn, attack, effect, area: effect != BasicEffect(variety),
+                        radius: Math.Min(attack.Range, SlamRadius), contact: !Marker(effect));
                     return;
             }
         }

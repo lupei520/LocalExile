@@ -179,18 +179,22 @@ static partial class QuestobjectsRules
     static byte[] IzaroLifeFloor(uint izaro, IzaroFights.Trial trial) =>
         !trial.Last && Stats.Key("cannot_drop_below_%_life") is uint key ? InstanceEntities.StatsUpdate(izaro, [(key, trial.LeavesAtPercent)]) : [];
 
-    // The Izaros this instance still has: the arena spawns his variety alone, so any monster of it is a leftover from an
-    // earlier entry, and it is taken out of the instance before the new one rises.
-    static List<uint> LeftoverIzaro(ClientState conn, IzaroFights.Trial trial)
+    // The Izaros this instance has: the live one is the fight (the player who is already fighting keeps it, and the one
+    // who comes in joins it), and the stale ones (dead, retired or without life, but still standing in the table) are
+    // taken out of the instance. A live actor is never retired: a second entrant must not end or replace the first
+    // player's trial (review 2026-11-11).
+    internal static (uint? Live, List<uint> Stale) IzaroActors(IEnumerable<KeyValuePair<uint, SpawnedMonster>> monsters,
+        string variety)
     {
-        var ids = new List<uint>();
-        lock (conn.Monsters)
+        uint? live = null;
+        var stale = new List<uint>();
+        foreach (var (id, monster) in monsters)
         {
-            foreach (var (id, monster) in conn.Monsters)
-                if (monster.Variety?.Id == trial.Variety) ids.Add(id);
-            foreach (uint id in ids) conn.Monsters.Remove(id);
+            if (monster.Variety?.Id != variety) continue;
+            if (!monster.Dead && !monster.Retired && monster.Life > 0) { live ??= id; continue; }
+            stale.Add(id);
         }
-        return ids;
+        return (live, stale);
     }
 
     // His second line at a trial's end (the arena's mechanic's, IzaroFinish…), after the first has played (the original:
@@ -232,12 +236,24 @@ static partial class QuestobjectsRules
                 return;
             }
             byte level = (byte)Math.Clamp(ServerLevels.AreaLevel(conn.Layout.Id), 1, 100);
-            // An Izaro already up in this instance (a player who died and came back through the corridor, or a second
-            // connection into the same instance) is taken down first: one Izaro, one life bar, one set of shutting doors
-            // and one death belong to one fight (live 2026-11-11: two of him, both chasing the player).
-            foreach (uint stale in LeftoverIzaro(conn, trial))
+            // An Izaro already up in this instance: the arena is one fight (one Izaro, one life bar, one set of shutting
+            // doors and one death belong to one fight). The player who is already fighting keeps it: the one who comes
+            // in joins that fight (the controller that drives it binds him to it), and only a stale actor (dead, retired
+            // or without life, but still standing in the table) is taken out of the instance. Replacing a live Izaro
+            // ended the first player's trial for free and left his client a ghost body (live 2026-11-11).
+            KeyValuePair<uint, SpawnedMonster>[] actors;
+            lock (conn.Monsters) actors = [.. conn.Monsters];
+            var (live, stale) = IzaroActors(actors, trial.Variety);
+            if (live is { } up)
             {
-                await Send(remote, stream, ciphers, InstanceProtocol.RemoveObject(stale), $"0x02bd Izaro 0x{stale:x} is gone");
+                Console.WriteLine($"[gateway] {remote} {what}: Izaro 0x{up:x} is already up in this instance; this player joins that fight");
+                return;
+            }
+            foreach (uint gone in stale)
+            {
+                // Dead server-side, his orders cancelled, his shared origin retired, and his removal published to
+                // every client of the instance (Game.RetireMonster): a client that still shows him drops him.
+                await Game.RetireMonster(conn, gone, $"0x02bd the stale Izaro 0x{gone:x} is gone");
             }
             uint izaro = await SpawnMonster(remote, stream, ciphers, conn, variety, level, MonsterRarity.Unique, elevator.X, elevator.Y,
                 placement: MonsterPlacement.Established, lifePercent: trial.StartPercent);
@@ -285,12 +301,15 @@ static partial class QuestobjectsRules
             // The fight, until he dies (the last trial) or his life reaches the trial's end (the others).
             while (Here())
             {
-                bool dead, leaves = false;
+                bool dead, retired, leaves = false;
                 int action = 0;
                 double free = 0;
                 lock (conn.Monsters)
                 {
-                    dead = boss.Dead || !ReferenceEquals(conn.Monsters.GetValueOrDefault(izaro), boss);
+                    // A retired Izaro is gone, but he did not die: the arena took him down (a second player entered and
+                    // the old Izaro was retired), so the trial is not won by his going.
+                    retired = boss.Retired;
+                    dead = !retired && (boss.Dead || !ReferenceEquals(conn.Monsters.GetValueOrDefault(izaro), boss));
                     if (!dead && boss.LifePhases is { } gate && gate.Begin(boss.Life, boss.MaxLife))
                     {
                         leaves = true;
@@ -299,6 +318,11 @@ static partial class QuestobjectsRules
                         boss.SwingGeneration = null;
                         action = ++boss.ActionGeneration;
                     }
+                }
+                if (retired)
+                {
+                    Console.WriteLine($"[gateway] {remote} {what}: Izaro 0x{izaro:x} was retired; the trial goes on with the new one");
+                    return;
                 }
                 if (dead)
                 {

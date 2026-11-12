@@ -36,7 +36,15 @@ abstract class AtlasBossFight
         bound.Add(conn);
     }
 
-    protected LifePhaseGate Phases => boss.LifePhases!;
+    // The monster's life gate. Null when the boss has none: a campaign boss has no gate of its own, and the
+    // Labyrinth's Izaro's gate belongs to the arena rule (Rules.Izaro.cs), not to this fight.
+    protected LifePhaseGate? Phases => boss.LifePhases;
+
+    /// <summary>Whether this fight owns the monster's life gate: the atlas fights do (their intermission is the
+    /// gate), the campaign ones do not. A gate that belongs to another controller must not be armed here: the
+    /// Labyrinth's arena rule watches Izaro's gate to know that he leaves, and a fight that armed it first would
+    /// take the threshold away from it.</summary>
+    protected virtual bool UsesLifeGate => true;
     protected MonsterCatalog.Variety Variety => boss.Variety!;
     // Log prefix: one line per action, the way the King and the Brine King log theirs.
     protected abstract string Name { get; }
@@ -80,17 +88,21 @@ abstract class AtlasBossFight
         // they belong to the clip that started them, not to the rotation.
         await Ticks(conn, now);
         bool watched = players.Any(p => !p.Closed && !p.LeavingArea && p.PlayerLife > 0);
+        var gate = UsesLifeGate ? Phases : null;
         if (!watched)
         {
             // Nobody is left to fight: the arena idles. An intermission that was running ends, so a player who comes back
             // finds a boss that can be damaged instead of one locked behind a shield nothing will ever lift.
             if (shielding && players.FirstOrDefault(p => !p.Closed) is { } back) await Shield(back, false);
-            if (Phases.Active) EndIntermission();
+            if (gate is { Active: true }) EndIntermission();
             return;
         }
-        if (!Phases.Active && Phases.Begin(boss.Life, boss.MaxLife)) { await Intermission(conn, now); return; }
-        if (Phases.Active) { await Intermission(conn, now); return; }
+        if (gate is { } open && !open.Active && open.Begin(boss.Life, boss.MaxLife)) { await Intermission(conn, now); return; }
+        if (gate is { Active: true }) { await Intermission(conn, now); return; }
         if (now < busyUntil) return;
+        // The encounter's own guard: the arena rule keeps Izaro on his elevator (BusyUntil infinite, EntranceGrace on)
+        // until the doors open, and the ordinary AI reads both. A scripted fight has to read them as well.
+        if (now < boss.BusyUntil || boss.EntranceGrace) return;
         await Act(conn, now);
     }
 
@@ -103,17 +115,21 @@ abstract class AtlasBossFight
     /// <summary>One step of an intermission, entered when a life threshold is crossed and left through
     /// <see cref="EndIntermission"/>.</summary>
     protected abstract Task Intermission(ClientState conn, double now);
-    // Kept for the classes below: an intermission that has played all of its waves closes its own gate.
-    protected void EndIntermission() => Phases.Finish();
+    // Kept for the classes below: an intermission that has played all of its waves closes its own gate. A fight
+    // that does not own the gate (the campaign fights) leaves it to whoever set it.
+    protected void EndIntermission() { if (UsesLifeGate) Phases?.Finish(); }
 
     /// <summary>Plays one of the boss's skills. The clip's own cast time keeps the boss busy; the method returns at once
-    /// (MonsterSwing awaits the clip and lands the hit, which must not hold the instance's tick).</summary>
-    protected void Swing(ClientState conn, int effect, bool area = false, double radius = 0) =>
-        SwingWith(conn, Attack(conn, effect), effect, area, radius);
+    /// (MonsterSwing awaits the clip and lands the hit, which must not hold the instance's tick).
+    /// <paramref name="contact"/> is false for a skill whose hit the controller lands itself: the action then plays the
+    /// clip and nothing else, so the player is not hit twice (the contact's range is 45 cells for a spell).</summary>
+    protected void Swing(ClientState conn, int effect, bool area = false, double radius = 0, bool contact = true) =>
+        SwingWith(conn, Attack(conn, effect), effect, area, radius, contact);
 
     /// <summary>The same, for a skill whose numbers the controller adjusts (a slam that hits harder than the melee it is
     /// built from); <paramref name="effect"/> still names the clip.</summary>
-    protected void SwingWith(ClientState conn, MonsterAttack attack, int effect, bool area = false, double radius = 0)
+    protected void SwingWith(ClientState conn, MonsterAttack attack, int effect, bool area = false, double radius = 0,
+        bool contact = true)
     {
         int action;
         lock (conn.Monsters)
@@ -125,15 +141,15 @@ abstract class AtlasBossFight
             busyUntil = Math.Max(busyUntil, now) + attack.Seconds + 0.2;
         }
         var (remote, stream, ciphers) = conn.Wire;
-        _ = Run(remote, stream, ciphers, conn, action, attack, area, radius, effect);
+        _ = Run(remote, stream, ciphers, conn, action, attack, area, radius, effect, contact);
     }
 
     async Task Run(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
-        int action, MonsterAttack attack, bool area, double radius, int effect)
+        int action, MonsterAttack attack, bool area, double radius, int effect, bool contact)
     {
         try
         {
-            await MonsterSwing(remote, stream, ciphers, conn, id, boss, action, attack, area, radius);
+            await MonsterSwing(remote, stream, ciphers, conn, id, boss, action, attack, area, radius, contactHit: contact);
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException) { }
         catch (Exception ex)
@@ -260,7 +276,7 @@ abstract class AtlasBossFight
         try
         {
             if (shielding) await Shield(conn, false);
-            if (Phases.Active) EndIntermission();
+            if (Phases is { Active: true }) EndIntermission();
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException) { }
         Stop();
@@ -269,7 +285,7 @@ abstract class AtlasBossFight
     internal void Stop()
     {
         stopped = true;
-        Phases.DamageTakenPercent = 100;
+        if (Phases is { } gate) gate.DamageTakenPercent = 100;
         if (players.FirstOrDefault() is { } conn)
             lock (conn.Monsters) boss.Walk.SetSpeed(boss.Variety?.MovementSpeed ?? 30, conn.Clock.Elapsed.TotalSeconds);
     }

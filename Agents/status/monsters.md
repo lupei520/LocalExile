@@ -164,16 +164,19 @@ Part of [Status](../Status.md); what to build next in this area is in
 - The campaign's scripted bosses (the Pantheon's twelve: Tukohama, Abberath and his enraged form, Ryslatha, Greust,
   Gruthkul, Arakaali, Yugul, Solaris and Lunaris, Shakari and her second form, Garukhan; and the acts' bosses: Brutus,
   Merveil and her twisted form, The Weaver, Piety, Dominus and his ascendant, Kaom, Daresso, Piety the Abomination,
-  Malachai and his second stage, Avarius and his reassembled form, Kitava in both fights, Shavronne and the reassembled
+  Malachai and his second stage, Avarius and his reassembled form, Shavronne and the reassembled
   Brutus, Maligaro, General Adus, Vilenta) fight with their own kits instead of one plain
   swing, after the Atlas bosses' pattern (the Brine King already had his own controller). All are scripted (the
   ordinary AI skips them), own their whole `GrantedEffectsKeys` list on the actor under ids 0x4030 + the index in
   the kit — never a gem id — and rotate it from one controller per monster: the melee keeps the variety's own
-  attack time and reach, every other skill of the kit is a slam, a hook or a projectile row and lands in its own
-  reach rather than on the one player the boss faced, so the slams (Tukohama's totem slam, Abberath's meteor
+  attack time and reach, every other skill of the kit is a slam, a hook or a projectile row and lands around the boss
+  (20 cells, the King in the Mists' own slam width) and only when the player stands close enough for it to reach them,
+  rather than on the one player the boss faced, so the slams (Tukohama's totem slam, Abberath's meteor
   upheaval, Gruthkul's upheaval, Shakari's
   tail strike, Garukhan's combo, Yugul's chomp, the Leap Slams) hit harder than the plain swing at their clip's cast
-  time, a marker row (a hide, a burrow, a dodge, a spawner trigger, Solaris' and Lunaris' transform) carries no hit,
+  time, a marker row (a hide, a burrow, a dodge, a spawner trigger, Solaris' and Lunaris' transform) carries no hit
+  and plays its clip only (an empty hit still rolls the evasion and the when-hit effects), and a monster another module
+  scripted is left to its own controller — the Survivors' gate bosses borrow these varieties and keep their own fight,
   and each skill's ground art was checked against the client's metadata. The monsters the fights raise are real
   varieties, spawned owned by the boss and retired with it: Tukohama stands behind his own `TukohamaShieldTotem`
   (cannot be damaged while it lives, and killing or outlasting it is what exposes him), Arakaali's egg mortars land
@@ -188,8 +191,10 @@ Part of [Status](../Status.md); what to build next in this area is in
   phases the data describes (Abberath 6008 then 6012, Shakari 6275 then 6278) are the first form's death raising the
   second where it fell (live: "its second form … appears", then the new monster gets its own fight and the drop), not a
   monster `WorldAreas` places — it lists row 6008 and 6275 only — and the soul flags sit on the second variety, so a
-  kill that stops at the first form sets nothing. Each kit's gate is created empty (`LifePhaseGate` with no thresholds
-  never arms, and `Step` still has one to read); Tukohama's shield is his own totem's. All twelve were played live
+  kill that stops at the first form sets nothing. A campaign boss carries no gate at all (`LifePhases` stays null, and
+  its fight owns none: it never arms one, so the one gate a boss of this list can carry — the Labyrinth's arena rule
+  watches Izaro's to know he leaves — is left to that rule, and a quest threshold a boss's own area registers stays
+  reachable, which an empty gate would have taken away from it); Tukohama's shield is his own totem's. All twelve were played live
   (2026-11-11, `/goto` each area and stand beside the boss): each wakes, deals damage and cycles three to six windups
   plus its slams — except Solaris and Lunaris, whom the Harbour Bridge leaves out of its population until the two orbs
   are handed to `GoddessFightStarter` (`On.UsedWith` then `On.Spawns`); `/spawn_mob` them and they fight like the rest.
@@ -213,8 +218,10 @@ Part of [Status](../Status.md); what to build next in this area is in
   lists today's rooms, `/goto 1_Labyrinth_boss_2_end` then a step onto the elevator (live 2026-11-11) rises it, shuts
   both arena doors, spawns Izaro as a Unique at the trial's start percent (33% of 158722 at level 33, his bar at it),
   says `Izaro3_Prefight` and fights — three distinct attack windups (1.0 s, 1.4 s, 3.0 s) and area skill 0x4007 at radius
-  45, his four granted rows. One Izaro per arena: entering again removes the one this instance still has (the same run
-  had two of him, both chasing). The arena's furniture comes from `scripts/re/atlas room-points`, which keeps a room for
+  45, his four granted rows. One Izaro per arena: the instance keeps the one that is fighting — a second entrant joins
+  that fight instead of replacing it, and only an actor that is already dead or retired is taken out of the instance
+  (`Game.RetireMonster`, which publishes the removal to every client that shows him; the same run had two of him, both
+  chasing). The arena's furniture comes from `scripts/re/atlas room-points`, which keeps a room for
   the Labyrinth's own server objects (`Metadata/Terrain/Labyrinth/Objects/`, `RoomFile.IsLabyrinthObject`, which
   `IsQuestObject` does not cover): `data/room-points.json` has the 249 Labyrinth rooms that carry one — the 30 boss rooms
   among them, with `LabyrinthIzaroArenaDoor`, `LabyrinthBossMarker`, `TeleportMarker` and the pre-fight speech — and

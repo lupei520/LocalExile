@@ -3,11 +3,15 @@ using System.Net.Sockets;
 using GameServer.Core.Protocol.Login;
 using GameServer.Core.World;
 
-static partial class CommandsRules
+/// <summary>
+/// The combat lab's dev commands (Agents/docs/dev/combat-lab.md). They own no damage math: /cast hands a normal
+/// C→S skill request to the Game module, which runs the ordinary pipeline, and /damage reads back what the ledger
+/// recorded. The receipt says the request was handed over; the ledger or /state is the evidence of what landed.
+/// <para>They live in the Game module, not in the Commands module: the Commands module holds the commands GGG's
+/// servers have, and the lab is a development tool that exercises this module's own boundary.</para>
+/// </summary>
+static class CombatLab
 {
-    // The combat lab's dev commands (Agents/docs/dev/combat-lab.md). They own no damage math: /cast hands a normal
-    // C→S skill request to the Game module, which runs the ordinary pipeline, and /damage reads back what the ledger
-    // recorded. The receipt says the request was handed over; the ledger or /state is the evidence of what landed.
 
     static ICombatLabCommands? Lab => Program.GameLogicOrNull as ICombatLabCommands;
 

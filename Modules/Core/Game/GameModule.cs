@@ -53,10 +53,20 @@ public sealed class GameModule : IModule
         module.Lifetime.Own(GameEvents.PlayerStatSources.Add("Game", global::Hierophant.PlayerStats));
         GameEvents.PlayerLeaving.Add(id, (conn, _) => global::Hierophant.Leaving(conn));
         GameEvents.PlayerLeaving.Add(id, (conn, _) => global::BrineKing.Leaving(conn));
+        // The combat lab's dev commands (Agents/docs/dev/combat-lab.md): they hand the request to the ordinary
+        // pipeline and read back the ledger. They are registered here because the lab is this module's own boundary;
+        // the Commands module holds the commands GGG's servers have.
+        GameEvents.Command(id, "cast", CombatLab.CastUsage, async (conn, args) => await CombatLab.CastSkill(conn, args), "gem", "monster");
+        GameEvents.Command(id, "skills", "/skills [filter] (dev: your own castable gems, one per line: id, name, level, quality, whether it needs a target and whether it can be used now)", async (conn, args) => await CombatLab.SkillsCommand(conn, args));
+        GameEvents.Command(id, "totems", "/totems [filter] (dev: your living totems, one per line: id, variety, level, life/max life, cell, seconds left and the skill each carries; they are not monsters, so /mobs and /state's monsters array never show them)", async (conn, args) => await CombatLab.TotemsCommand(conn, args));
+        GameEvents.Command(id, "socket_gem", "/socket_gem <gem id|name> [<equipped item id|name>] [<socket index>] (dev: socket one of your inventory gems through the ordinary socket operation, so a test can choose which skill is under test)", async (conn, args) => await CombatLab.SocketGemCommand(conn, args, conn.Wire.Remote, conn.Wire.Stream, conn.Wire.Ciphers), "gem", "item");
+        GameEvents.Command(id, "smite", CombatLab.SmiteUsage, async (conn, args) => await CombatLab.SmiteCommand(conn, args, conn.Wire.Remote, conn.Wire.Stream, conn.Wire.Ciphers), "monster");
+        GameEvents.Command(id, "mob_life", CombatLab.MobLifeUsage, async (conn, args) => await CombatLab.MobLifeCommand(conn, args, conn.Wire.Remote, conn.Wire.Stream, conn.Wire.Ciphers), "monster");
+        GameEvents.Command(id, "damage", "/damage [count] [filter] | clear (dev: write the last damage records to logs/damage-<character>.jsonl, one compact JSON object per line, and answer a one-line summary)", async (conn, args) => await CombatLab.DamageCommand(conn, args));
     }
 }
 
-public sealed class GameLogic(IModuleLifetime? lifetime = null) : IGameLogic, IControlledPlayerRules, IControlledPlayerCommands, IWorldAdmissionRules
+public sealed partial class GameLogic(IModuleLifetime? lifetime = null) : IGameLogic, IControlledPlayerRules, IControlledPlayerCommands, IWorldAdmissionRules
 {
     public IModuleLifetime? Lifetime { get; } = lifetime ?? Rules.CombatLifetime;
     public bool WorldAdmissionActive => Lifetime is { IsActive: true } && ReferenceEquals(Lifetime, Rules.CombatLifetime);
@@ -146,7 +156,7 @@ public sealed class GameLogic(IModuleLifetime? lifetime = null) : IGameLogic, IC
 
 // The in-game combat lab: the chat commands of the Commands module reach the ordinary skill path and the damage
 // ledger through this boundary (src/GameServer.Gateway/Connection/CombatLab.cs, Agents/docs/dev/combat-lab.md).
-sealed partial class GameLogic : ICombatLabCommands
+public sealed partial class GameLogic : ICombatLabCommands
 {
     public ushort? SkillIdByName(ClientState player, string name) => Rules.SkillMatchByName(player, name).Id is var id and not 0 ? id : null;
 

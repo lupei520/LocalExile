@@ -65,7 +65,9 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
                 from.Y + (int)Math.Round(Math.Sin(angle) * 26)));
             var attack = Attack(conn, effect);
             pending.Add((at + 0.5, attack, from, to, 4.5));
-            SwingWith(conn, attack with { Seconds = 0.9 }, effect);
+            // The clip only: the blast lands where the geometry says, so the action must not land a contact as well
+            // (a contact is a hit within 45 cells, which is a second hit for a player who stepped out of the beam).
+            SwingWith(conn, attack with { Seconds = 0.9 }, effect, contact: false);
         }
         foreach (var hit in pending.Where(h => h.At <= now).ToArray())
         {
@@ -140,7 +142,8 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
         await Effect(conn, to, AtlasBosses.SirusNukeBeamArt, 3.4, 1.2f);
         var attack = Attack(conn, AtlasBosses.SirusCorridorBlastEffect);
         pending.Add((now + 1.1, attack, from, to, 5.5));
-        SwingWith(conn, attack with { Seconds = 2.0 }, AtlasBosses.SirusCorridorBlastEffect);
+        // The clip only: the corridor is the hit, and a contact would hit the player again anywhere near the arena.
+        SwingWith(conn, attack with { Seconds = 2.0 }, AtlasBosses.SirusCorridorBlastEffect, contact: false);
     }
 
     /// <summary>The meteor arena (10141): eight meteors around the player, then the desolation underfoot (10945) that
@@ -164,7 +167,8 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
         var burn = Attack(conn, AtlasBosses.SirusMeteorGroundEffect);
         groundTick = burn with { Seconds = 0.5, Damage = burn.Damage.Scale(0.5) };
         await Effect(conn, groundAt, AtlasBosses.SirusMeteorGroundArt, 5, 1.2f);
-        SwingWith(conn, attack with { Seconds = 2.0 }, AtlasBosses.SirusMeteorEffect);
+        // The clip only: the meteors and the burning ground are the hits.
+        SwingWith(conn, attack with { Seconds = 2.0 }, AtlasBosses.SirusMeteorEffect, contact: false);
     }
 
     /// <summary>The circle maze (10949-10953): the carpet of beams leaving as one sweep, five blasts at a fifth of a turn
@@ -176,8 +180,9 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
         await Effect(conn, from, AtlasBosses.SirusCarpetArt, 4, 1.4f);
         for (int i = 0; i < 5; i++)
             sweep.Enqueue((now + 0.35 + i * 0.45, AtlasBosses.SirusCircleMazeEffect + i, angle + i * Math.Tau / 5));
+        // The clip only: the sweep's five blasts are the hits.
         SwingWith(conn, Attack(conn, AtlasBosses.SirusCircleMazeEffect) with { Seconds = 0.9 },
-            AtlasBosses.SirusCircleMazeEffect);
+            AtlasBosses.SirusCircleMazeEffect, contact: false);
     }
 
     /// <summary>The multi-beam barrage (8098): three beams of the clone's kind leave in a fan (the clip plays the whole
@@ -195,8 +200,9 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
                 from.Y + (int)Math.Round(Math.Sin(a) * 30)));
             pending.Add((now + 1.0, beam, from, to, 4));
         }
+        // The clip only: the three beams are the hits.
         SwingWith(conn, Attack(conn, AtlasBosses.SirusMultiBeamEffect) with { Seconds = 1.6 },
-            AtlasBosses.SirusMultiBeamEffect);
+            AtlasBosses.SirusMultiBeamEffect, contact: false);
     }
 
     /// <summary>The beam bomb (10973): the doom geyser under the player, a 1.3 s warning and then an eight unit blast.</summary>
@@ -206,7 +212,8 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
         await Effect(conn, at, AtlasBosses.SirusDoomGeyserArt, 2.6, 1.2f);
         var attack = Attack(conn, AtlasBosses.SirusBeamBombEffect);
         pending.Add((now + 1.3, attack, at, at, 8));
-        SwingWith(conn, attack with { Seconds = 1.6 }, AtlasBosses.SirusBeamBombEffect);
+        // The clip only: the geyser's blast is the hit.
+        SwingWith(conn, attack with { Seconds = 1.6 }, AtlasBosses.SirusBeamBombEffect, contact: false);
     }
 
     /// <summary>His teleport (6809): the clip is played at both ends by the art, and the walk estimate and the client's
@@ -263,7 +270,8 @@ sealed class SirusFight(uint id, SpawnedMonster boss, ClientState conn) : AtlasB
                 from.Y + (int)Math.Round(Math.Sin(a) * 30)));
             pending.Add((now + 1.2, beam, from, to, 4));
         }
-        SwingWith(conn, beam with { Seconds = 1.6 }, effect);
+        // The clip only: the six beams of the fan are the hits.
+        SwingWith(conn, beam with { Seconds = 1.6 }, effect, contact: false);
         waveAt = now + 1.8;
         busyUntil = now + 1.4;
     }

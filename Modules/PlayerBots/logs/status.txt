@@ -1,0 +1,63 @@
+﻿Боты на 2026-11-10 13:42:03
+Rowena740_bot                  Rowena740                ур.  8  Act 2 (The Forest Encampment)    квест «The Way Forward» (сюжет): find the encampment
+Тихомир_bot                    Тихомир                  ур. 57  Act 8 (The Sarn Encampment)      стоит и отдыхает
+Снежана_Быстрый_bot            Снежана_Быстрый          ур. 43  Act 6 (Lioneye's Watch)          квест «The Father of War» (сюжет): Tukohama, The Karui Fortress
+Тихий_Радомир_bot              Тихий_Радомир            ур. 46  Act 7 (The Bridge Encampment)    квест «Essence of the Artist» (сюжет): Maligaro's Map, The Crypt; Maligaro, Maligaro's Sanctum; Silk appears with the map
+Xander_bot                     Xander                   ур.  8  Act 2 (The Forest Encampment)    стоит и отдыхает
+Zarek53_bot                    Zarek53                  ур.  3  Act 1 (Lioneye's Watch)          квест «Mercy Mission» (сюжет): Medicine Chest, The Tidal Island; Nessa
+Lyra_bot                       Lyra                     ур. 71  Epilogue (Karui Shores)          стоит и отдыхает
+ElaraFrost_bot                 ElaraFrost               ур. 56  Act 9 (Highgate)                 стоит и отдыхает
+Ironhide_Vesper_bot            Ironhide_Vesper          ур. 69  Epilogue (Karui Shores)          стоит и отдыхает
+Микула383_bot                  Микула383                ур. 14  Act 2 (The Forest Encampment)    квест «The Way Forward» (сюжет): find the encampment
+Ведана132_bot                  Ведана132                ур.  3  Act 1 (Lioneye's Watch)          стоит и отдыхает
+Снежана896_bot                 Снежана896               ур. 73  Epilogue (Karui Shores)          стоит и отдыхает
+Рыжий_Вольга_bot               Рыжий_Вольга             ур. 14  Act 2 (The Forest Encampment)    стоит и отдыхает
+RowenaGrimm_bot                RowenaGrimm              ур. 57  Act 9 (Highgate)                 стоит и отдыхает
+Тихомир880_bot                 Тихомир880               ур.  3  Act 1 (Lioneye's Watch)          стоит и отдыхает
+Corvin_bot                     Corvin                   ур.  3  Act 1 (Lioneye's Watch)          квест «The Way Forward» (сюжет): path to the forest; completed on reaching Act 2
+Радомир_Волчий_bot             Радомир_Волчий           ур. 72  Act 10 (Oriath Docks)            стоит и отдыхает
+Brightblade_Garrick_bot        Brightblade_Garrick      ур. 50  Act 7 (The Bridge Encampment)    стоит и отдыхает
+Magnus949_bot                  Magnus949                ур. 58  Act 9 (Highgate)                 стоит и отдыхает
+Смелый_Будимир_bot             Смелый_Будимир           ур. 49  Act 8 (The Sarn Encampment)      квест «Essence of the Hag» (сюжет): Doedre, Doedre's Cesspool
+Светозар_Рыжий_bot             Светозар_Рыжий           ур. 39  Act 6 (Lioneye's Watch)          стоит и отдыхает
+CassiaIronhide_bot             CassiaIronhide           ур. 29  Act 5 (Overseer's Tower)         стоит и отдыхает
+KaelAshfall_bot                KaelAshfall              ур. 42  Act 6 (Lioneye's Watch)          стоит и отдыхает
+Остромир293_bot                Остромир293              ур. 14  Act 2 (The Forest Encampment)    квест «The Root of the Problem» (сюжет): Baleful Gem, tree to The Vaal Ruins
+Велемир_bot                    Велемир                  ур. 61  Act 9 (Highgate)                 стоит и отдыхает
+Morrigan_bot                   Morrigan                 ур. 49  Act 7 (The Bridge Encampment)    стоит и отдыхает
+Ночной_Всеволод_bot            Ночной_Всеволод          ур. 69  Act 10 (Oriath Docks)            стоит и отдыхает
+Ждан_bot                       Ждан                     ур. 70  Epilogue (Karui Shores)          стоит и отдыхает
+Ночной_Лада_bot                Ночной_Лада              ур. 69  Act 10 (Oriath Docks)            квест «Vilenta's Vengeance» (побочный): Vilenta, The Control Blocks; Lani
+Ironhide_Isolde_bot            Ironhide_Isolde          ур. 71  Epilogue (Karui Shores)          стоит и отдыхает
+CassiaEmberheart_bot           CassiaEmberheart         ур. 15  Act 3 (The Sarn Encampment)      стоит и отдыхает
+Всеволод_Волчий_bot            Всеволод_Волчий          ур. 36  Act 5 (Overseer's Tower)         стоит и отдыхает
+Ashfall_Wren_bot               Ashfall_Wren             ур. 41  Act 6 (Lioneye's Watch)          стоит и отдыхает
+CorvinRavencall_bot            CorvinRavencall          ур. 21  Act 3 (The Sarn Encampment)      стоит и отдыхает
+Orrin_bot                      Orrin                    ур. 15  Act 3 (The Sarn Encampment)      квест «Lost in Love» (сюжет): Clarissa, The City of Sarn; Tolman's bracelet, The Crematorium; Maramoa
+Забава866_bot                  Забава866                ур. 21  Act 3 (The Sarn Encampment)      квест «Fiery Dust» (сюжет): Thaumetic Sulphite, The Docks; Undying Blockage
+Sigrid99_bot                   Sigrid99                 ур. 21  Act 3 (The Sarn Encampment)      квест «A Fixture of Fate» (побочный): Golden Pages, The Archives; Siosa
+MagnusWolfsbane_bot            MagnusWolfsbane          ур. 23  Act 4 (Highgate)                 стоит и отдыхает
+Tamsin539_bot                  Tamsin539                ур. 22  Act 4 (Highgate)                 квест «The King of Fury» (сюжет): Kaom, Kaom's Stronghold
+Забава883_bot                  Забава883                ур. 29  Act 4 (Highgate)                 стоит и отдыхает
+Isolde928_bot                  Isolde928                ур. 29  Act 5 (Overseer's Tower)         стоит и отдыхает
+Vesper439_bot                  Vesper439                ур. 33  Act 5 (Overseer's Tower)         стоит и отдыхает
+Злата_Рыжий_bot                Злата_Рыжий              ур. 50  Act 8 (The Sarn Encampment)      стоит и отдыхает
+Берендей_bot                   Берендей                 ур. 36  Act 6 (Lioneye's Watch)          квест «The Father of War» (сюжет): Tukohama, The Karui Fortress
+Jorund_bot                     Jorund                   ур. 43  Act 7 (The Bridge Encampment)    стоит и отдыхает
+Fenwick605_bot                 Fenwick605               ур. 33  Act 5 (Overseer's Tower)         квест «The King's Feast» (сюжет): Utula, The Ruined Square
+Blackthorn_Jorund_bot          Blackthorn_Jorund        ур. 33  Act 5 (Overseer's Tower)         квест «The King's Feast» (сюжет): Utula, The Ruined Square
+Касьян825_bot                  Касьян825                ур. 30  Act 5 (Overseer's Tower)         квест «The Key to Freedom» (сюжет): Justicar Casticus, The Control Blocks
+Горазд24_bot                   Горазд24                 ур. 33  Act 5 (Overseer's Tower)         квест «Death to Purity» (сюжет): High Templar Avarius, The Chamber of Innocence
+Ysolde778_bot                  Ysolde778                ур. 43  Act 7 (The Bridge Encampment)    стоит и отдыхает
+ZarekNightshade_bot            ZarekNightshade          ур. 58  Act 9 (Highgate)                 квест «Recurring Nightmare» (сюжет): Depraved Trinity, The Rotting Core
+Ravencall_Elara_bot            Ravencall_Elara          ур. 43  Act 7 (The Bridge Encampment)    стоит и отдыхает
+Огнеслав56_bot                 Огнеслав56               ур. 44  Act 7 (The Bridge Encampment)    квест «Web of Secrets» (сюжет): Black Death's venom for Silk's Obsidian Key, the passage into The Den
+Ясна_bot                       Ясна                     ур. 69  Epilogue (Karui Shores)          квест «Toward the Future» (сюжет): Lilly Roth sails to Karui Shores
+Злата_Грозный_bot              Злата_Грозный            ур. 50  Act 7 (The Bridge Encampment)    квест «The Mother of Spiders» (сюжет): Arakaali, The Temple of Decay
+HelkaBlackthorn_bot            HelkaBlackthorn          ур. 55  Act 8 (The Sarn Encampment)      квест «Love is Dead» (побочный): Ankh of Eternity, The Quay; Clarissa
+Isolde808_bot                  Isolde808                ур. 55  Act 8 (The Sarn Encampment)      квест «The Wings of Vastiri» (побочный): Hector Titucius, The Bath House; Hargan
+Vesper434_bot                  Vesper434                ур. 72  Act 10 (Oriath Docks)            стоит и отдыхает
+Тёмный_Касьян_bot              Тёмный_Касьян            ур. 71  Epilogue (Karui Shores)          квест «Toward the Future» (сюжет): Lilly Roth sails to Karui Shores
+Любава985_bot                  Любава985                ур. 63  Act 9 (Highgate)                 квест «The Ruler of Highgate» (побочный): Kira/Garukhan, The Quarry
+Helka78_bot                    Helka78                  ур. 71  Epilogue (Karui Shores)          квест «An End to Hunger» (сюжет): Act 11 entry: Lani's reward in Karui Shores when not taken in Oriath Docks
+GarrickThornwick_bot           GarrickThornwick         ур. 62  Act 9 (Highgate)                 квест «The Ruler of Highgate» (побочный): Kira/Garukhan, The Quarry
