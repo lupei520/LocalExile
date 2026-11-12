@@ -73,7 +73,7 @@ public sealed class MonsterCatalog(string folder = "data")
     /// <summary>
     /// When the variety's death clip clears the corpse's body from the client's paths, in ms from the clip's start (its
     /// remove_collidability event; data/monster-takehit.json "death"), null when it has none: the client then clears the
-    /// body with the death itself. 150 for a file written before the entry existed (most varieties' value).
+    /// body with the death itself. 150 when the data itself is missing, and the value most varieties' clips give.
     /// </summary>
     public int? CorpseUnblockMs(string id) => _corpse.Value is { } known ? known.GetValueOrDefault(id) : 150;
 
