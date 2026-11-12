@@ -401,10 +401,14 @@ public static partial class Game
         if (item.Rarity == ItemRarity.Unique && item.NameWords is [var nameWord])
         {
             var uniques = UniquesFor(conn);
-            var limitedJewel = uniques.All.FirstOrDefault(d => d.JewelLimit > 0 && uniques.NameWord(d) == nameWord);
-            if (limitedJewel is not null && ItemsOf(conn).Items(PlayerInventories.PassiveJewels)
-                .Count(j => j.X != x && j.Item.Rarity == ItemRarity.Unique && j.Item.NameWords.Contains(nameWord)) >= limitedJewel.JewelLimit)
-                return $"only {limitedJewel.JewelLimit} {limitedJewel.Name} can be socketed";
+            // The client's own table is the game's rule: it limits 112 unique jewels (one, two or three of them).
+            // A definition's own limit is the fallback for a unique the client does not name.
+            var clientLimit = uniques.JewelLimit(nameWord);
+            var limitedJewel = uniques.All.FirstOrDefault(d => uniques.NameWord(d) == nameWord);
+            int limit = clientLimit?.Limit ?? limitedJewel?.JewelLimit ?? 0;
+            if (limit > 0 && ItemsOf(conn).Items(PlayerInventories.PassiveJewels)
+                .Count(j => j.X != x && j.Item.Rarity == ItemRarity.Unique && j.Item.NameWords.Contains(nameWord)) >= limit)
+                return $"only {limit} {clientLimit?.Name ?? limitedJewel?.Name ?? "such a jewel"} can be socketed";
         }
         if (ImpossibleEscapeCatalogue.Read(item, ItemsFor(conn).Mods) is not null)
         {

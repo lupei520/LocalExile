@@ -144,7 +144,8 @@ Part of [Status](../Status.md); what to build next in this area is in
   `limit_overrides`, `catalog_entries`, `system_settings`, `unique_weights` and the drop tables are world.db content
   built from `sql/` (Agents/docs/dev/databases.md); a change is an update file. The Gateway loads the rows at startup
   and atomically republishes them on `/reload`, so no restart is needed; a bad row keeps the previous snapshot.
-  Limits currently cover the Historic timeless jewel, Impossible Escape, radius unique jewels and the tattoo total/group
+  Limits currently cover the Historic timeless jewel, Impossible Escape, radius unique jewels, the unique jewels the
+  client's own UniqueJewelLimits table limits (one, two or three of them, 112 uniques) and the tattoo total/group
   caps. `catalog_entries` holds the unique-item, radius/threshold/unique/timeless jewel, tattoo-effect and jewel-art
   catalogues (1,299 / 76 / 43 / 6 / 48 / 190 rows; the unique rows are the generated PoB catalogue with the 3.29
   corrections). `system_settings` holds 53 numeric knobs, checked on load: 21 socket caps by item class (wand 3, body 6, helmet/gloves/boots 4,

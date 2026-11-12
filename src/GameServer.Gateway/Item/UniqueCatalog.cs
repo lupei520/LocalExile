@@ -68,6 +68,7 @@ public sealed class UniqueCatalog(ItemCatalog items, string folder = "data")
     };
 
     readonly Lazy<Dictionary<string, UniqueName>> _names = new(() => LoadNames(folder));
+    readonly Lazy<Dictionary<uint, (int Limit, string Name)>> _limits = new(() => LoadLimits(folder));
 
     public IReadOnlyList<Definition> All => GameDataCatalog.Uniques;
 
@@ -99,6 +100,17 @@ public sealed class UniqueCatalog(ItemCatalog items, string folder = "data")
     /// survivors pool uses it to skip a unique the character already wears without rolling a whole item.</summary>
     public uint? NameWord(Definition definition) =>
         _names.Value.TryGetValue(NameKey(definition.Name), out var unique) ? unique.Word : null;
+
+    /// <summary>The game's own limit on how many of a unique one character may socket, and the unique's name: the
+    /// client limits some unique jewels (one, two or three of them) and names them by their word row. Null when the
+    /// client does not limit that unique.</summary>
+    public (int Limit, string Name)? JewelLimit(uint nameWord) =>
+        _limits.Value.TryGetValue(nameWord, out var entry) ? entry : null;
+
+    /// <summary>The game's own limit on how many of the unique with this name one character may socket, or null when
+    /// the client does not limit it.</summary>
+    public int? JewelLimit(string name) =>
+        _names.Value.TryGetValue(NameKey(name), out var unique) ? JewelLimit(unique.Word)?.Limit : null;
 
     /// <summary>The unique item for a name, or null when the name is not one or its base type is not writable.</summary>
     public Item? Create(string name, Random random) => Find(name) is { } definition ? Create(definition, random) : null;
@@ -288,6 +300,27 @@ public sealed class UniqueCatalog(ItemCatalog items, string folder = "data")
     }
 
     sealed record UniqueName(uint Word, ushort VisualIdentity);
+
+    /// <summary>The client's UniqueJewelLimits table: the game limits how many of a unique jewel one character may
+    /// socket (one, two or three), and names the unique by its word row. The word's hash is the unique's name word,
+    /// the same word the item carries.</summary>
+    static Dictionary<uint, (int Limit, string Name)> LoadLimits(string folder)
+    {
+        var result = new Dictionary<uint, (int, string)>();
+        string Table(string name) => Path.Combine(folder, "tables", name + ".json");
+        if (!ClientTables.Exists(Table("Words")) || !ClientTables.Exists(Table("UniqueJewelLimits"))) return result;
+        using var words = GameTables.Open(Table("Words"));
+        using var limits = GameTables.Open(Table("UniqueJewelLimits"));
+        foreach (var row in limits.RootElement.EnumerateArray())
+        {
+            int word = row.GetProperty("JewelName").GetInt32(), limit = row.GetProperty("Limit").GetInt32();
+            if (limit <= 0 || word < 0 || word >= words.RootElement.GetArrayLength()) continue;
+            string? name = words.RootElement[word].GetProperty("Text").GetString();
+            if (string.IsNullOrEmpty(name)) continue;
+            result[words.RootElement[word].GetProperty("HASH32").GetUInt32()] = (limit, name);
+        }
+        return result;
+    }
 
     static Dictionary<string, UniqueName> LoadNames(string folder)
     {
