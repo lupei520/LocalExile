@@ -36,7 +36,15 @@ sealed record DelveMine(int Version, uint Seed, DelveMine.Point Current, IReadOn
     public static bool Change(ISavedData account, Func<DelveMine, DelveMine?> change) => account.Change(Key, old =>
         change(Parse(old)) is { } next ? JsonSerializer.Serialize(next) : null);
 
-    public static byte MonsterLevel(int depth) => (byte)(34 + Math.Min(52L, Math.Max(0L, (long)depth - 1) * 52 / 149));
+    // The client's own depth curve (data/tables/DelveLevelScaling.json "MonsterLevel"): 34 at depth 1, rising to 83 at
+    // depth 149 and staying there. The mine's area level and its monsters' level are the same number.
+    static readonly Lazy<byte[]> Levels = new(() =>
+    {
+        using var doc = JsonDocument.Parse(GameServer.Core.ClientTables.ReadAllBytes("data/tables/DelveLevelScaling.json"));
+        return [.. doc.RootElement.EnumerateArray().OrderBy(r => r.GetProperty("Depth").GetInt32())
+            .Select(r => (byte)r.GetProperty("MonsterLevel").GetInt32())];
+    });
+    public static byte MonsterLevel(int depth) => Levels.Value[Math.Clamp(depth - 1, 0, Levels.Value.Length - 1)];
     public static double PackMultiplier(int depth) => 1 + Math.Max(0L, (long)depth - 1) / 100.0;
 
     public Plan? Select(IReadOnlyList<InstanceDelve.RoutePoint> selected, Func<int, int> price, out string why)

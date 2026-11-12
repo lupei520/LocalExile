@@ -178,7 +178,8 @@ Part of [Status](../Status.md); what to build next in this area is in
     The Crawler's own forward axis leads each rail segment; rounded cells do not change its heading, and only clear
     sleeve connections are smoothed. Wheels, engine, torch, checkpoint pads, 30-cell lamps and cables remain in place.
     Supported Weta/Spider packs
-    scale with depth (up to 100 per authored pack); levels rise from 34 at depth 1 to 86 at depth 150, then stay 86.
+    scale with depth (up to 100 per authored pack); the mine's level follows the client's own depth curve (34 at depth 1,
+    83 from depth 149).
     Kill rewards and 15–20 base completion items gain depth IIQ/IIR; the existing configurable item cap remains.
     Newly opened destinations receive one completion reward; revisiting opened points cannot farm free rewards.
     Native walking/Kinetic Blast completed a route with exact 24 sulphite debit and one reward. Native checks also

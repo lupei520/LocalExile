@@ -29,5 +29,7 @@
     <ProjectReference Include="..\..\Modules\Core\World\QuestObjects\QuestObjects.csproj" />
     <!-- The Atlas's completed maps (AtlasProgressTests). -->
     <ProjectReference Include="..\..\Modules\Core\World\Atlas\Atlas.csproj" />
+    <!-- The Delve's depth scaling (DelveDepthTests). -->
+    <ProjectReference Include="..\..\Modules\Core\Content\Delve\Delve.csproj" />
   </ItemGroup>
 </Project>
